@@ -9,7 +9,9 @@
 # Broker/database ports bind to 127.0.0.1 only (training access); a deployed
 # configuration would keep them entirely private (assignment §13).
 #
-# Milestone 3 adds: topology-init one-shot + outbox-dispatcher service.
+# Milestone 3: topology-init one-shot (idempotent declarations) + the outbox
+# dispatcher process; workers and dispatcher gate on topology-init so nothing
+# publishes before exchanges/queues/bindings exist.
 # Milestone 4 adds: retry-scheduler service.
 # Milestone 5 adds: web (Flutter SPA) service.
 name: quickbite
@@ -78,6 +80,31 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # Idempotent broker topology (exchanges/queues/bindings) declared BEFORE
+  # the dispatcher or any consumer starts (assignment §9).
+  topology-init:
+    <<: *backend
+    command: ["python", "-m", "scripts.init_topology"]
+    restart: "no"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  # Transactional outbox publisher: lease -> publish (confirms + mandatory
+  # routing) -> SENT only after confirmation (assignment §10).
+  outbox-dispatcher:
+    <<: *backend
+    command: ["python", "-m", "app.messaging.outbox_dispatcher"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      topology-init:
+        condition: service_completed_successfully
+
   # --- API (the only Flutter-facing backend) ------------------------------
   api:
     <<: *backend
@@ -111,6 +138,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      topology-init:
+        condition: service_completed_successfully
 
   restaurant-worker:
     <<: *backend
@@ -120,6 +149,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      topology-init:
+        condition: service_completed_successfully
 
   delivery-worker:
     <<: *backend
@@ -129,6 +160,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      topology-init:
+        condition: service_completed_successfully
 
   notification-worker:
     <<: *backend
@@ -138,6 +171,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      topology-init:
+        condition: service_completed_successfully
 
 volumes:
   pgdata:

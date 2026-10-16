@@ -63,6 +63,19 @@ SEED_ACCOUNTS: list[dict[str, Any]] = [
     },
 ]
 
+# Fictional driver roster (assignment §5/§12): drivers are simulated only —
+# there is no drivers table because `driver_assignments` is the only place
+# driver identity is persisted. The delivery worker picks one deterministically
+# from this roster (stable hash of the order id) so demos are reproducible.
+SEED_DRIVERS: list[dict[str, str]] = [
+    {"driver_id": "drv_arjun", "driver_name": "Arjun Nair"},
+    {"driver_id": "drv_meera", "driver_name": "Meera Iyer"},
+    {"driver_id": "drv_kabir", "driver_name": "Kabir Singh"},
+    {"driver_id": "drv_sana", "driver_name": "Sana Fernandes"},
+    {"driver_id": "drv_rohit", "driver_name": "Rohit Menon"},
+    {"driver_id": "drv_zoya", "driver_name": "Zoya Khan"},
+]
+
 # (id, name, description, [(id, name, description, price_minor, available, sort)])
 SEED_RESTAURANTS: list[dict[str, Any]] = [
     {

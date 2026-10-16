@@ -1,0 +1,14 @@
+ Container quickbite-postgres-1 Running 
+ Container quickbite-postgres-1 Waiting 
+ Container quickbite-postgres-1 Healthy 
+ Container quickbite-migrate-1 Starting 
+ Container quickbite-migrate-1 Started 
+ Container quickbite-migrate-1 Waiting 
+ Container quickbite-postgres-1 Waiting 
+ Container quickbite-postgres-1 Healthy 
+ Container quickbite-migrate-1 Exited 
+ Container quickbite-api-run-f380d4a3431a Creating 
+ Container quickbite-api-run-f380d4a3431a Created 
+........................................................................ [ 68%]
+.................................                                        [100%]
+105 passed in 33.93s

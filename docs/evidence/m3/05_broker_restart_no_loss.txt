@@ -1,0 +1,70 @@
+1) docker compose stop rabbitmq
+ Container quickbite-rabbitmq-1 Stopping 
+ Container quickbite-rabbitmq-1 Stopped 
+
+2) readiness during the outage (200 "degraded": PostgreSQL gates, RabbitMQ reported)
+{"status":"degraded","checks":{"postgres":"up","rabbitmq":"down"},"request_id":"c2c37f4977f04fc1b4764988c1424cd8","time":"2026-10-16T18:32:42.810058+00:00"}
+HTTP 200
+
+3) POST /api/v1/orders during the outage -> still 202, event committed to PostgreSQL only
+HTTP/1.1 202 Accepted
+date: Fri, 16 Oct 2026 18:32:42 GMT
+server: uvicorn
+location: /api/v1/orders/order_8a1c34220ab446f4ae7e2ad402a30c0c
+content-length: 184
+content-type: application/json
+x-request-id: req_m3_broker_restart
+vary: Origin
+
+{"order_id":"order_8a1c34220ab446f4ae7e2ad402a30c0c","status":"PENDING","currency":"INR","total_amount_minor":71000,"version":1,"message":"Order accepted for asynchronous processing."}
+4) outbox rows while the broker is DOWN (order order_8a1c34220ab446f4ae7e2ad402a30c0c: PENDING/CLAIMED, never SENT)
+order.created | state=PENDING | attempts=0
+
+5) dispatcher log during the outage (row stays eligible; bounded cycle backoff)
+outbox-dispatcher-1  | {"ts": "2026-10-16T18:32:18.692+00:00", "level": "INFO", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "outbox dispatcher stopped", "consumer": "outbox-dispatcher", "result": "stopped"}
+outbox-dispatcher-1  | {"ts": "2026-10-16T18:32:31.993+00:00", "level": "INFO", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "outbox dispatcher starting", "consumer": "outbox-dispatcher", "result": "starting"}
+outbox-dispatcher-1  | {"ts": "2026-10-16T18:32:34.604+00:00", "level": "INFO", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "outbox published", "order_id": "order_79c1fdea5b5f4805b5a9bde87d813886", "event_id": "evt_created_d6553049d4de461082ba4cf9b77cd2c9", "result": "sent"}
+outbox-dispatcher-1  | {"ts": "2026-10-16T18:32:34.604+00:00", "level": "INFO", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "dispatcher cycle complete"}
+outbox-dispatcher-1  | {"ts": "2026-10-16T18:32:36.133+00:00", "level": "INFO", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "outbox published", "order_id": "order_79c1fdea5b5f4805b5a9bde87d813886", "event_id": "evt_paid_c88ee052efb84f698458c61c92096649", "result": "sent"}
+outbox-dispatcher-1  | {"ts": "2026-10-16T18:32:36.134+00:00", "level": "INFO", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "dispatcher cycle complete"}
+outbox-dispatcher-1  | {"ts": "2026-10-16T18:32:37.655+00:00", "level": "INFO", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "outbox published", "order_id": "order_79c1fdea5b5f4805b5a9bde87d813886", "event_id": "evt_confirmed_79a5bc79a4ff4092a0497fd5a3d482ce", "result": "sent"}
+outbox-dispatcher-1  | {"ts": "2026-10-16T18:32:37.655+00:00", "level": "INFO", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "dispatcher cycle complete"}
+outbox-dispatcher-1  | {"ts": "2026-10-16T18:32:39.187+00:00", "level": "INFO", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "outbox published", "order_id": "order_79c1fdea5b5f4805b5a9bde87d813886", "event_id": "evt_driver_assigned_0cde5e21c3124a7599f136dd2514c15b", "result": "sent"}
+outbox-dispatcher-1  | {"ts": "2026-10-16T18:32:39.187+00:00", "level": "INFO", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "dispatcher cycle complete"}
+outbox-dispatcher-1  | {"ts": "2026-10-16T18:32:41.557+00:00", "level": "ERROR", "logger": "aiormq.connection", "service": "outbox-dispatcher", "message": "Unexpected connection close from remote \"amqp://quickbite:******@rabbitmq:5672/\", Connection.Close(reply_code=320, reply_text=\"CONNECTION_FORCED - broker forced connection closure with reason 'shutdown'\")"}
+outbox-dispatcher-1  | {"ts": "2026-10-16T18:32:41.558+00:00", "level": "WARNING", "logger": "aiormq.connection", "service": "outbox-dispatcher", "message": "Cancelling cause reader exited abnormally", "exception": "Traceback (most recent call last):\n  File \"/srv/quickbite/.venv/lib/python3.12/site-packages/aiormq/connection.py\", line 751, in __reader\n    await self.__handle_close(frame)\n  File \"/srv/quickbite/.venv/lib/python3.12/site-packages/aiormq/connection.py\", line 698, in __handle_close\n    raise exception\naiormq.exceptions.ConnectionClosed: [Errno 320] CONNECTION_FORCED - broker forced connection closure with reason 'shutdown'"}
+
+6) docker compose start rabbitmq  (waiting for the healthcheck)
+ Container quickbite-rabbitmq-1 Starting 
+ Container quickbite-rabbitmq-1 Started 
+rabbitmq health: healthy
+
+7) polling GET /api/v1/orders/order_8a1c34220ab446f4ae7e2ad402a30c0c until DRIVER_ASSIGNED after the restart
+final status: DRIVER_ASSIGNED
+
+8) outbox rows after recovery (all SENT; attempts > 1 proves failed attempts were retried)
+      event_type       | state | attempts | last_error 
+-----------------------+-------+----------+------------
+ order.driver.assigned | SENT  |        1 | 
+ order.paid            | SENT  |        1 | 
+ order.confirmed       | SENT  |        1 | 
+ order.created         | SENT  |        5 | 
+(4 rows)
+
+
+9) worker reconnect + processing logs
+payment-worker-1  | {"ts": "2026-10-16T18:32:31.615+00:00", "level": "INFO", "logger": "quickbite.topology", "service": "payment-worker", "message": "topology declared", "result": "declared"}
+payment-worker-1  | {"ts": "2026-10-16T18:32:31.615+00:00", "level": "INFO", "logger": "quickbite.worker", "service": "payment-worker", "message": "worker connected; consuming", "consumer": "payment", "result": "consuming"}
+payment-worker-1  | {"ts": "2026-10-16T18:32:35.630+00:00", "level": "INFO", "logger": "quickbite.worker", "service": "payment-worker", "message": "message processed", "correlation_id": "req_m3_live_demo", "order_id": "order_79c1fdea5b5f4805b5a9bde87d813886", "event_id": "evt_created_d6553049d4de461082ba4cf9b77cd2c9", "consumer": "payment", "result": "applied"}
+payment-worker-1  | {"ts": "2026-10-16T18:32:41.557+00:00", "level": "ERROR", "logger": "aiormq.connection", "service": "payment-worker", "message": "Unexpected connection close from remote \"amqp://quickbite:******@rabbitmq:5672/\", Connection.Close(reply_code=320, reply_text=\"CONNECTION_FORCED - broker forced connection closure with reason 'shutdown'\")"}
+payment-worker-1  | {"ts": "2026-10-16T18:32:41.557+00:00", "level": "WARNING", "logger": "aiormq.connection", "service": "payment-worker", "message": "Cancelling cause reader exited abnormally", "exception": "Traceback (most recent call last):\n  File \"/srv/quickbite/.venv/lib/python3.12/site-packages/aiormq/connection.py\", line 751, in __reader\n    await self.__handle_close(frame)\n  File \"/srv/quickbite/.venv/lib/python3.12/site-packages/aiormq/connection.py\", line 698, in __handle_close\n    raise exception\naiormq.exceptions.ConnectionClosed: [Errno 320] CONNECTION_FORCED - broker forced connection closure with reason 'shutdown'"}
+payment-worker-1  | {"ts": "2026-10-16T18:32:41.559+00:00", "level": "WARNING", "logger": "quickbite.worker", "service": "payment-worker", "message": "connection/consume failure; reconnecting with bounded backoff", "consumer": "payment", "result": "reconnect:StreamEndedError", "retry_in_s": 1.0}
+payment-worker-1  | {"ts": "2026-10-16T18:32:42.564+00:00", "level": "ERROR", "logger": "aiormq.connection", "service": "payment-worker", "message": "error when creating transport: <AMQPConnectionError: (111, \"Connect call failed ('172.20.0.3', 5672)\")>"}
+payment-worker-1  | {"ts": "2026-10-16T18:32:42.564+00:00", "level": "WARNING", "logger": "quickbite.worker", "service": "payment-worker", "message": "connection/consume failure; reconnecting with bounded backoff", "consumer": "payment", "result": "reconnect:AMQPConnectionError", "retry_in_s": 2.0}
+payment-worker-1  | {"ts": "2026-10-16T18:32:44.571+00:00", "level": "ERROR", "logger": "aiormq.connection", "service": "payment-worker", "message": "error when creating transport: <AMQPConnectionError: (-3, 'Temporary failure in name resolution')>"}
+payment-worker-1  | {"ts": "2026-10-16T18:32:44.571+00:00", "level": "WARNING", "logger": "quickbite.worker", "service": "payment-worker", "message": "connection/consume failure; reconnecting with bounded backoff", "consumer": "payment", "result": "reconnect:AMQPConnectionError", "retry_in_s": 5.0}
+payment-worker-1  | {"ts": "2026-10-16T18:32:49.578+00:00", "level": "ERROR", "logger": "aiormq.connection", "service": "payment-worker", "message": "error when creating transport: <AMQPConnectionError: (-3, 'Temporary failure in name resolution')>"}
+payment-worker-1  | {"ts": "2026-10-16T18:32:49.578+00:00", "level": "WARNING", "logger": "quickbite.worker", "service": "payment-worker", "message": "connection/consume failure; reconnecting with bounded backoff", "consumer": "payment", "result": "reconnect:AMQPConnectionError", "retry_in_s": 10.0}
+payment-worker-1  | {"ts": "2026-10-16T18:32:59.633+00:00", "level": "INFO", "logger": "quickbite.topology", "service": "payment-worker", "message": "topology declared", "result": "declared"}
+payment-worker-1  | {"ts": "2026-10-16T18:32:59.633+00:00", "level": "INFO", "logger": "quickbite.worker", "service": "payment-worker", "message": "worker connected; consuming", "consumer": "payment", "result": "consuming"}
+payment-worker-1  | {"ts": "2026-10-16T18:33:00.654+00:00", "level": "INFO", "logger": "quickbite.worker", "service": "payment-worker", "message": "message processed", "correlation_id": "req_m3_broker_restart", "order_id": "order_8a1c34220ab446f4ae7e2ad402a30c0c", "event_id": "evt_created_67efb1e04f9c4ef19e1e022f360975a4", "consumer": "payment", "result": "applied"}

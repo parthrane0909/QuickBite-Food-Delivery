@@ -32,11 +32,35 @@ Base path: `/api/v1` (health probes are unversioned: `/health/live`,
 | `GET /api/v1/orders` | Customer | Paginated **own** orders; optional exact `status` filter (invalid value → 422) |
 | `GET /api/v1/orders/{id}` | Owner or admin | Current state, items, totals, failure details, version, timestamps |
 | `GET /api/v1/orders/{id}/history` | Owner or admin | Append-only, version-ordered transition timeline (single page; history is bounded at 7 entries by the state machine) |
+| `GET /api/v1/orders/{id}/notifications` | Owner or admin | Paginated notification timeline for the order (see below) |
 
-*Planned in later milestones (not yet served):* `GET /orders/{id}/notifications`
-(Milestone 3, needs persisted notifications), `GET /admin/orders` and
-`GET /admin/summary` (Milestone 6). Until then they return 404/403 per the
-role guards.
+*Planned in a later milestone:* `GET /admin/orders` and `GET /admin/summary`
+(Milestone 6 at the latest). Until then they return 404/403 per the role guards.
+
+## Notifications: `GET /api/v1/orders/{id}/notifications`
+
+Persisted by the notification worker as events are consumed (`order.created`,
+`order.paid`, `order.payment.failed`, `order.confirmed`,
+`order.driver.assigned`, `order.failed`) — a notification is a read-model side
+effect and **never** changes order status.
+
+Query: `page >= 1`, `page_size >= 1` (max 100, else 422) — the standard
+pagination rules above. Ordering is **chronological by `seq` ascending**
+(gap-free per order, assigned by PostgreSQL on insert); `total` counts the
+order's notifications.
+
+```json
+{"items":[{"id":"notif_…","seq":1,"order_id":"order_…","type":"order.created",
+  "message":"Order order_… received — Bella Napoli will confirm shortly.",
+  "order_version":1,"created_at":"2026-10-16T18:32:34.615200Z"}],
+ "page":1,"page_size":20,"total":4}
+```
+
+Access follows the order-read rules: owner → 200, admin → 200, any other
+customer → **404** (existence never leaks; never 403). An out-of-range page
+returns `{"items": [], …, "total": n}`. See
+[`docs/event-contract.md`](event-contract.md) for how the events behind these
+notifications are routed.
 
 ## Checkout: `POST /api/v1/orders`
 
@@ -99,16 +123,18 @@ Location: /api/v1/orders/order_abc123
   (`order.created`). If the commit fails, an error is returned — never a
   false 202.
 - Records are retained for the assignment lifetime (a production design would
-  expire them after the client's retry window, documented in
-  `docs/reliability.md` when written).
+  expire them after the client's retry window — noted in
+  [`docs/reliability.md`](reliability.md)).
 
 ### Broker independence
 
 Checkout performs **no RabbitMQ I/O**. During a broker outage the API returns
 202 as usual, the order exists in PostgreSQL, and its outbox row stays
-`PENDING` until the dispatcher (Milestone 3) recovers. `/health/ready` keeps
-returning `200` with `status: "degraded"` because PostgreSQL is the gating
-dependency — an accepted PENDING order may be waiting for messaging recovery.
+`PENDING` until the outbox dispatcher publishes it after recovery (proven
+end-to-end in `docs/evidence/m3/05_broker_restart_no_loss.txt`).
+`/health/ready` keeps returning `200` with `status: "degraded"` because
+PostgreSQL is the gating dependency — an accepted PENDING order may be waiting
+for messaging recovery.
 
 ## Order status machine (assignment §6)
 
@@ -120,12 +146,15 @@ PAID    -> FAILED      CONFIRMED -> FAILED        (terminal)
 
 No backward transitions; every transition increments `version` and appends
 exactly one `order_status_history` row per `(order_id, version)`.
-Workers apply transitions from Milestone 3 onward (row lock / compare-and-set).
+Workers apply transitions under a row lock (`FOR UPDATE`) with version-aware
+preconditions — see [`docs/event-contract.md`](event-contract.md).
 
 ## Event envelope (`order.created`)
 
 Committed to `outbox_events` in the same transaction as the order, published
-later by the dispatcher with `AMQP message_id = event_id`:
+later by the dispatcher with `AMQP message_id = event_id` onto the topic
+exchange `quickbite.orders` (all six event types and their routing:
+[`docs/event-contract.md`](event-contract.md)):
 
 ```json
 {

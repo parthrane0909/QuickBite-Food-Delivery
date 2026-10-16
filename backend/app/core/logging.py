@@ -30,6 +30,10 @@ _EMITTED_EXTRAS = (
     "http_status",
     "elapsed_ms",
     "result",
+    # Transport/publish failure diagnostics (publisher exception text — no
+    # payload content, no PII by construction) and retry scheduling.
+    "detail",
+    "retry_in_s",
 )
 
 _SENSITIVE_MARKERS = ("password", "token", "authorization", "secret", "jwt", "address")

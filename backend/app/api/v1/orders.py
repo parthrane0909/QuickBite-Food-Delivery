@@ -19,6 +19,7 @@ from app.schemas.orders import (
     IDEMPOTENCY_KEY_MAX_LENGTH,
     ORDER_STATUS_FILTER,
     CheckoutRequest,
+    NotificationPage,
     OrderAccepted,
     OrderDetail,
     OrderHistoryPage,
@@ -116,3 +117,18 @@ async def get_order_history(
 ) -> OrderHistoryPage:
     """Append-only, version-ordered state-transition timeline (owner or admin)."""
     return await order_query_service.get_order_history(session, user=user, order_id=order_id)
+
+
+@router.get("/orders/{order_id}/notifications", response_model=NotificationPage)
+async def get_order_notifications(
+    order_id: str,
+    session: SessionDep,
+    user: CurrentUserDep,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = 20,
+) -> NotificationPage:
+    """Persisted in-app notification feed for one order (owner or admin),
+    chronological order with cursorless pagination."""
+    return await order_query_service.get_notifications(
+        session, user=user, order_id=order_id, page=page, page_size=page_size
+    )

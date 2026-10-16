@@ -28,6 +28,14 @@ async def get_order_with_restaurant(
     return (row[0], row[1]) if row is not None else None
 
 
+async def get_order_for_update(session: AsyncSession, order_id: str) -> Order | None:
+    """Row-level lock (FOR UPDATE) — the worker serialization point: competing
+    consumers/duplicate deliveries of the same order queue here, so state,
+    version and dedup checks are race-free (assignment §10)."""
+    result = await session.execute(select(Order).where(Order.id == order_id).with_for_update())
+    return result.scalar_one_or_none()
+
+
 async def count_customer_orders(
     session: AsyncSession, *, customer_id: str, status: str | None = None
 ) -> int:

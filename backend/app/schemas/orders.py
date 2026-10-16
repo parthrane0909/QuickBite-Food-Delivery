@@ -117,3 +117,19 @@ class OrderHistoryPage(Page[OrderHistoryEntry]):
     entries (PENDING..DRIVER_ASSIGNED/failures), far below max page_size."""
 
     pass
+
+
+class NotificationEntry(BaseModel):
+    """One persisted in-app notification (owner/admin feed)."""
+
+    id: str
+    seq: int  # server-assigned monotonic feed order
+    order_id: str
+    type: str  # event type that produced it (assignment §9)
+    message: str
+    order_version: int | None = None  # ties the notice to a transition
+    created_at: datetime
+
+
+class NotificationPage(Page[NotificationEntry]):
+    pass

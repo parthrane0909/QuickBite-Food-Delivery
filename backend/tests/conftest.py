@@ -42,6 +42,14 @@ def _ensure_env_defaults() -> None:
     os.environ.setdefault("JWT_SECRET", "quickbite-test-secret-0123456789abcdef")
     os.environ.setdefault("AMQP_URL", "amqp://quickbite:change-me-rabbit@127.0.0.1:5672/")
     os.environ.setdefault("CORS_ORIGINS", "http://localhost:5000,http://localhost:8080")
+    # Milestone 3: FORCED zero stage delays + fast outbox polling so the
+    # pipeline harness is deterministic and fast. Real configured delays are
+    # demonstrated by the live evidence script, not the test suite.
+    os.environ["PAYMENT_DELAY_SECONDS"] = "0"
+    os.environ["RESTAURANT_DELAY_SECONDS"] = "0"
+    os.environ["DELIVERY_DELAY_SECONDS"] = "0"
+    os.environ["NOTIFICATION_DELAY_SECONDS"] = "0"
+    os.environ["OUTBOX_POLL_INTERVAL_SECONDS"] = "0.05"
 
 
 def _bootstrap_test_database() -> None:
@@ -111,7 +119,29 @@ def _drop_test_database() -> None:
     asyncio.run(_drop())
 
 
+def _require_broker() -> None:
+    """Milestone 3 tests exercise REAL RabbitMQ (assignment §14 forbids
+    hiding behind skips). Fail at session start with the exact fix instead
+    of failing mid-suite."""
+
+    async def _probe() -> None:
+        import aio_pika
+
+        connection = await aio_pika.connect(os.environ["AMQP_URL"], timeout=5)
+        await connection.close()
+
+    try:
+        asyncio.run(asyncio.wait_for(_probe(), timeout=15))
+    except Exception as exc:  # noqa: BLE001 — any probe failure is fatal here
+        raise RuntimeError(
+            "RabbitMQ is required for this suite but unreachable at "
+            f"{os.environ.get('AMQP_URL')}: {exc}\n"
+            "Start the services first: docker compose up -d postgres rabbitmq"
+        ) from exc
+
+
 _bootstrap_test_database()
+_require_broker()
 
 
 def pytest_sessionfinish(session, exitstatus):  # noqa: ANN001, ANN201
@@ -184,6 +214,21 @@ async def async_client():
     transport = httpx2.ASGITransport(app=create_app())
     async with httpx2.AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
+
+
+@pytest.fixture()
+async def pipeline():
+    """Real outbox dispatcher + real consumer runtimes against the
+    TEST-namespaced topology (tests/m3_harness.py). M3 tests start only the
+    components each scenario needs."""
+    from tests.m3_harness import PipelineHarness
+
+    harness = PipelineHarness()
+    await harness.setup()
+    try:
+        yield harness
+    finally:
+        await harness.teardown()
 
 
 def auth_header(token: str) -> dict[str, str]:

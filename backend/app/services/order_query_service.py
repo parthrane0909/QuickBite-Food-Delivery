@@ -12,8 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import NotFoundError
 from app.db.models.order import Order
 from app.db.models.user import User
+from app.repositories import notifications as notifications_repo
 from app.repositories import orders as orders_repo
 from app.schemas.orders import (
+    NotificationEntry,
+    NotificationPage,
     OrderDetail,
     OrderHistoryEntry,
     OrderHistoryPage,
@@ -121,3 +124,33 @@ async def get_order_history(
     return OrderHistoryPage(
         items=timeline, page=1, page_size=max(len(timeline), 1), total=len(timeline)
     )
+
+
+async def get_notifications(
+    session: AsyncSession, *, user: User, order_id: str, page: int, page_size: int
+) -> NotificationPage:
+    """Persisted in-app notification feed for one order (owner or admin),
+    chronological `seq` order, real cursorless pagination."""
+    row = await orders_repo.get_order_with_restaurant(session, order_id)
+    if row is None:
+        raise NotFoundError(NOT_FOUND_MESSAGE)
+    order, _ = row
+    _ensure_visible(order, user)
+
+    total = await notifications_repo.count_for_order(session, order_id=order_id)
+    rows = await notifications_repo.list_for_order(
+        session, order_id=order_id, page=page, page_size=page_size
+    )
+    items = [
+        NotificationEntry(
+            id=entry.id,
+            seq=entry.seq,
+            order_id=entry.order_id,
+            type=entry.type,
+            message=entry.message,
+            order_version=entry.order_version,
+            created_at=entry.created_at,
+        )
+        for entry in rows
+    ]
+    return NotificationPage(items=items, page=page, page_size=page_size, total=total)

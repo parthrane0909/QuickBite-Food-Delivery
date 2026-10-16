@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     outbox_poll_interval_seconds: float = Field(default=0.5, ge=0.05, le=30.0)
     outbox_lease_seconds: float = Field(default=30.0, ge=5.0, le=600.0)
 
+    # --- Consumer runtime (Milestone 3): finite in-flight limit per channel ---
+    worker_prefetch_count: int = Field(default=8, ge=1, le=64)
+
     # ---------------- validators ----------------
 
     @field_validator("environment")
