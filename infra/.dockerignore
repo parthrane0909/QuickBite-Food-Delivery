@@ -1,0 +1,4 @@
+# Build-context exclusions for infra-based images (web server, etc.).
+.git
+.env
+*.log

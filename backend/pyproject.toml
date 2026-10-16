@@ -1,0 +1,47 @@
+[project]
+name = "quickbite-backend"
+version = "2.0.0"
+description = "QuickBite Revised Full-Stack Assignment v2.0 — FastAPI + PostgreSQL + RabbitMQ order processing backend"
+requires-python = ">=3.12,<3.14"
+# First-order dependencies are pinned exactly; transitive versions are pinned
+# in uv.lock (committed, used identically by the Docker build).
+dependencies = [
+    "fastapi==0.143.2",
+    "pydantic==2.14.1",
+    "pydantic-settings==2.16.0",
+    "sqlalchemy[asyncio]==2.1.4",
+    "alembic==1.20.0",
+    "asyncpg==0.32.0",
+    "aio-pika==10.1.1",
+    "pwdlib[argon2]==0.3.1",
+    "pyjwt==2.15.1",
+    "uvicorn==0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "httpx2==2.13.1",
+    "ruff==0.17.1",
+]
+
+[tool.uv]
+# Application (not a publishable library): no package build step.
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "error::DeprecationWarning:app.*",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008"]  # FastAPI Depends() in defaults is idiomatic

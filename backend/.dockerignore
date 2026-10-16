@@ -1,0 +1,12 @@
+# Build-context exclusions for the backend image.
+.git
+.gitignore
+.env
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+.venv
+htmlcov
+.coverage
+*.log

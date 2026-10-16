@@ -1,0 +1,144 @@
+# QuickBite v2.0 — Docker Compose (local training environment)
+#
+# Services: postgres (authority), rabbitmq (work distribution), api,
+# migrate/seed one-shots, and four INDEPENDENT worker processes that all run
+# the same backend image with different commands.
+#
+# Scaling rule: `docker compose up -d --scale payment-worker=3` MUST work —
+# therefore no fixed container_name and no per-worker host port anywhere.
+# Broker/database ports bind to 127.0.0.1 only (training access); a deployed
+# configuration would keep them entirely private (assignment §13).
+#
+# Milestone 3 adds: topology-init one-shot + outbox-dispatcher service.
+# Milestone 4 adds: retry-scheduler service.
+# Milestone 5 adds: web (Flutter SPA) service.
+name: quickbite
+
+x-backend: &backend
+  build:
+    context: ./backend
+  image: quickbite-backend:local
+  env_file:
+    - .env
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:17.11
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Host port 5433 to avoid colliding with a host PostgreSQL on 5432
+      # (change the left side if 5433 is taken on another machine).
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4.3.6-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASSWORD}
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+      - ./infra/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    ports:
+      - "127.0.0.1:15672:15672" # management UI (local training only)
+      - "127.0.0.1:5672:5672"   # AMQP for host-run tests/demo scripts (local only)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  # --- One-shot, deliberate steps (never run by every worker) -------------
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  seed:
+    <<: *backend
+    command: ["python", "-m", "scripts.seed_demo"]
+    restart: "no"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # --- API (the only Flutter-facing backend) ------------------------------
+  api:
+    <<: *backend
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # --- Four independent worker processes (same image, different command) --
+  payment-worker:
+    <<: *backend
+    command: ["python", "-m", "workers.payment"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  restaurant-worker:
+    <<: *backend
+    command: ["python", "-m", "workers.restaurant"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  delivery-worker:
+    <<: *backend
+    command: ["python", "-m", "workers.delivery"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  notification-worker:
+    <<: *backend
+    command: ["python", "-m", "workers.notification"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  rabbitmqdata:

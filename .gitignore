@@ -1,0 +1,58 @@
+# Secrets / local configuration — never commit
+.env
+*.pem
+*.key
+*.p12
+*.jks
+secrets/
+credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Alembic
+backend/alembic.ini.local
+
+# Dart / Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+frontend/build/
+frontend/.dart_tool/
+*.iml
+
+# Native build outputs
+frontend/android/.gradle/
+frontend/android/local.properties
+frontend/ios/Pods/
+frontend/ios/.symlinks/
+frontend/ios/Flutter/Flutter.framework
+frontend/ios/Flutter/App.framework
+*.apk
+*.aab
+*.ipa
+*.xcarchive
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Logs and local data
+*.log
+logs/
+local-data/
+
+# NOTE: dependency lockfiles (backend/uv.lock, frontend/pubspec.lock) are
+# intentionally committed — do NOT add them here.
