@@ -1,0 +1,19 @@
+A) unavailable menu item
+{"code":"VALIDATION_ERROR","message":"Menu item 'BBQ Chicken Pizza' is currently unavailable.","details":{"reason":"item_unavailable","menu_item_id":"item_bbq_chicken_pizza"},"request_id":"4d662679488641ca8e8a7b9a8741d01d"}
+HTTP 422
+
+B) item from another restaurant (mixed cart)
+{"code":"VALIDATION_ERROR","message":"All items must belong to the selected restaurant.","details":{"reason":"item_not_in_restaurant","menu_item_id":"item_dal_makhani","expected_restaurant_id":"rest_bella_napoli"},"request_id":"bd32e22b51884362b0cb898d6d69d709"}
+HTTP 422
+
+C) missing Idempotency-Key header
+{"code":"IDEMPOTENCY_KEY_REQUIRED","message":"The Idempotency-Key header is required for checkout.","details":{"header":"Idempotency-Key"},"request_id":"d0a2a887efce4a728c99a49717b9ea99"}
+HTTP 422
+
+D) client-supplied price/total fields
+{"code":"VALIDATION_ERROR","message":"Request validation failed.","details":[{"location":"body.total_amount_minor","message":"Extra inputs are not permitted","type":"extra_forbidden"}],"request_id":"db0a28c9afe343379bf7fd08c32fb645"}
+HTTP 422
+
+E) unauthenticated
+{"code":"UNAUTHENTICATED","message":"Missing bearer token.","details":null,"request_id":"2767a5d29e4c4016b810aa136d99c712"}
+HTTP 401

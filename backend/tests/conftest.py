@@ -147,6 +147,24 @@ def customer_token(login) -> str:
 
 
 @pytest.fixture()
+def customer_id() -> str:
+    """The seeded primary customer's stable user id."""
+    from scripts.seed_demo import SEED_ACCOUNTS
+
+    return next(a for a in SEED_ACCOUNTS if a["role"] == "customer")["id"]
+
+
+@pytest.fixture()
+def second_customer_token(login) -> str:
+    """A DIFFERENT seeded customer (bob) — used for ownership isolation."""
+    from scripts.seed_demo import SEED_ACCOUNTS
+
+    customers = [a for a in SEED_ACCOUNTS if a["role"] == "customer"]
+    assert len(customers) >= 2, "seed must provide a second customer"
+    return login(customers[1]["email"], customers[1]["password"])["access_token"]
+
+
+@pytest.fixture()
 def admin_token(login) -> str:
     from scripts.seed_demo import SEED_ACCOUNTS
 
@@ -154,5 +172,58 @@ def admin_token(login) -> str:
     return login(account["email"], account["password"])["access_token"]
 
 
+@pytest.fixture()
+async def async_client():
+    """ASGI client on the SAME app — several of these run concurrently in one
+    event loop, with NullPool giving every request its own PostgreSQL
+    connection: real concurrent transactions for idempotency tests."""
+    import httpx2
+
+    from app.main import create_app
+
+    transport = httpx2.ASGITransport(app=create_app())
+    async with httpx2.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        yield client
+
+
 def auth_header(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
+
+
+async def count_rows_async(*entities) -> dict[str, int]:
+    """Row counts keyed by table name — proves 'no partial writes' and
+    'exactly one order/event' claims directly against PostgreSQL."""
+    from sqlalchemy import func, select
+
+    from app.db.session import session_scope
+
+    counts: dict[str, int] = {}
+    async with session_scope() as session:
+        for entity in entities:
+            table = entity.__tablename__
+            result = await session.execute(select(func.count()).select_from(entity))
+            counts[table] = int(result.scalar_one())
+    return counts
+
+
+def count_rows(*entities) -> dict[str, int]:
+    """Sync wrapper for tests that are not async."""
+    return asyncio.run(count_rows_async(*entities))
+
+
+async def checkout_counts_async() -> dict[str, int]:
+    """Counts of every table the acceptance transaction must (or must not)
+    write: order, items, history, idempotency record and outbox event."""
+    from app.db.models.checkout_idempotency import CheckoutIdempotency
+    from app.db.models.order import Order
+    from app.db.models.order_item import OrderItem
+    from app.db.models.order_status_history import OrderStatusHistory
+    from app.db.models.outbox_event import OutboxEvent
+
+    return await count_rows_async(
+        Order, OrderItem, OrderStatusHistory, OutboxEvent, CheckoutIdempotency
+    )
+
+
+def checkout_counts() -> dict[str, int]:
+    return asyncio.run(checkout_counts_async())

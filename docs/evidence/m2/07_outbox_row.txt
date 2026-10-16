@@ -1,0 +1,23 @@
+                   event_id                   |  event_type   |     exchange     |  routing_key  |  state  | attempts 
+----------------------------------------------+---------------+------------------+---------------+---------+----------
+ evt_created_d11f73cfe679467b99065c9feaeeec15 | order.created | quickbite.orders | order.created | PENDING |        0
+(1 row)
+
+                         event_envelope                          
+-----------------------------------------------------------------
+ {                                                              +
+     "data": {                                                  +
+         "customer_id": "user_alice",                           +
+         "restaurant_id": "rest_bella_napoli"                   +
+     },                                                         +
+     "event_id": "evt_created_d11f73cfe679467b99065c9feaeeec15",+
+     "order_id": "order_8ff2b1c3241a4cedac181b63bca7642b",      +
+     "event_type": "order.created",                             +
+     "occurred_at": "2026-10-16T15:57:51.226147Z",              +
+     "causation_id": null,                                      +
+     "order_version": 1,                                        +
+     "correlation_id": "req_m2_demo",                           +
+     "schema_version": 1                                        +
+ }
+(1 row)
+

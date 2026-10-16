@@ -3,6 +3,8 @@ menu lookups used by checkout (Milestone 2)."""
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +31,18 @@ async def list_restaurants(session: AsyncSession, *, page: int, page_size: int) 
 async def get_restaurant(session: AsyncSession, restaurant_id: str) -> Restaurant | None:
     result = await session.execute(select(Restaurant).where(Restaurant.id == restaurant_id))
     return result.scalar_one_or_none()
+
+
+async def get_menu_items_by_ids(
+    session: AsyncSession, menu_item_ids: Iterable[str]
+) -> dict[str, MenuItem]:
+    """Authoritative checkout lookup: current price/availability for exactly
+    the requested items, keyed by id (missing ids are simply absent)."""
+    ids = list(menu_item_ids)
+    if not ids:
+        return {}
+    result = await session.execute(select(MenuItem).where(MenuItem.id.in_(ids)))
+    return {item.id: item for item in result.scalars()}
 
 
 async def count_menu_items(session: AsyncSession, restaurant_id: str) -> int:

@@ -1,0 +1,23 @@
+ Container quickbite-postgres-1 Running 
+ Container quickbite-postgres-1 Waiting 
+ Container quickbite-postgres-1 Healthy 
+ Container quickbite-migrate-1 Starting 
+ Container quickbite-migrate-1 Started 
+ Container quickbite-migrate-1 Waiting 
+ Container quickbite-postgres-1 Waiting 
+ Container quickbite-postgres-1 Healthy 
+ Container quickbite-migrate-1 Exited 
+ Container quickbite-api-run-27f6debeeaa5 Creating 
+ Container quickbite-api-run-27f6debeeaa5 Created 
+============================= test session starts ==============================
+platform linux -- Python 3.12.15, pytest-9.1.1, pluggy-1.7.0
+rootdir: /srv/quickbite
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collected 84 items / 82 deselected / 2 selected
+
+tests/test_checkout_idempotency.py ..                                    [100%]
+
+======================= 2 passed, 82 deselected in 0.82s =======================

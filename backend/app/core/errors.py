@@ -78,9 +78,21 @@ class ConflictError(AppError):
     code = "CONFLICT"
 
 
+class IdempotencyConflictError(ConflictError):
+    """Same Idempotency-Key replayed with a DIFFERENT request payload."""
+
+    code = "IDEMPOTENCY_CONFLICT"
+
+
 class ValidationFailedError(AppError):
     status_code = 422
     code = "VALIDATION_ERROR"
+
+
+class IdempotencyKeyMissingError(ValidationFailedError):
+    """Checkout without the required Idempotency-Key header (assignment §7)."""
+
+    code = "IDEMPOTENCY_KEY_REQUIRED"
 
 
 _HTTP_STATUS_CODES = {

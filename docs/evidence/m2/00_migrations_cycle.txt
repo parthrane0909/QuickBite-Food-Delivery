@@ -1,0 +1,6 @@
+$ docker compose run --rm api sh -c "alembic downgrade base && alembic upgrade head"
+INFO  [alembic.runtime.migration] Running downgrade 0001 -> , initial schema
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001, initial schema
+
+$ docker compose run --rm seed   # re-seed after the deliberate downgrade
+{"ts": "2026-10-16T15:57:50.917+00:00", "level": "INFO", "logger": "quickbite.seed", "service": "seed", "message": "seed complete", "result": "{'users_created': 4, 'users_updated': 0, 'restaurants': 4, 'menu_items': 24}"}

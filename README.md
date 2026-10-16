@@ -6,8 +6,9 @@ simulated asynchronous pipeline (payment → restaurant → delivery → notific
 while an admin observes read-only aggregates. **PostgreSQL is the sole source of
 truth**; RabbitMQ only distributes work.
 
-> Status: **Milestone 1 (Foundation) complete**, pending milestone approval.
-> See [Milestones](#milestones) for what is and is not implemented yet.
+> Status: **Milestone 2 (Order API, Checkout, Idempotency, Outbox) complete**,
+> pending milestone approval. See [Milestones](#milestones) for what is and is
+> not implemented yet. API contract: [`docs/api.md`](docs/api.md).
 
 ## Stack (pinned)
 
@@ -28,8 +29,11 @@ backend/            FastAPI app (app/), Alembic migrations (migrations/), tests,
 frontend/           Flutter app (lib/app, lib/core, lib/features — grows per milestone)
 compose.yaml        postgres, rabbitmq, api, migrate, seed, 4 independent workers
 infra/rabbitmq.conf Broker configuration
+docs/api.md         API contract: pagination, errors, money, idempotency, events
+docs/openapi.json   Exported OpenAPI document (regenerate: scripts note inside docs/api.md)
+docs/evidence/      Per-milestone run evidence (m1/, m2/, …)
+scripts/            Reproducible evidence capture (capture_m2_evidence.sh)
 .env.example        Full configuration template (copy to .env; real .env is git-ignored)
-docs/evidence/      Screenshots and captured run evidence per milestone
 QuickBite_Master_Implementation_Prompt.md   Implementation contract (milestones + gates)
 ```
 
@@ -92,6 +96,9 @@ docker compose logs -f payment-worker delivery-worker restaurant-worker notifica
 cd frontend
 flutter pub get && flutter analyze && flutter test
 flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
+
+# Reproduce this milestone's live evidence (stack must be up):
+./scripts/capture_m2_evidence.sh        # writes docs/evidence/m2/
 ```
 
 Scale workers freely — the compose file defines no fixed container names or
@@ -108,20 +115,41 @@ per-worker host ports: `docker compose up -d --scale payment-worker=3`.
 
 | # | Scope | Status |
 | --- | --- | --- |
-| 1 | Foundation: repo, Compose, migrations, seed, auth, health, worker scaffolds, Flutter shell | ✅ complete, awaiting approval |
-| 2 | Checkout contract + idempotency | ⬜ not started |
+| 1 | Foundation: repo, Compose, migrations, seed, auth, health, worker scaffolds, Flutter shell | ✅ approved |
+| 2 | Browsing, server-priced idempotent checkout, order reads, ownership, transactional outbox | ✅ complete, awaiting approval |
 | 3 | Outbox, topology, consumers, dispatcher | ⬜ not started |
 | 4 | Retry scheduler, quarantine, failure paths | ⬜ not started |
 | 5 | Full Flutter UI (Android/Web) | ⬜ not started |
 | 6 | Admin, hardening, docs, final verification | ⬜ not started |
 | 7 | Submission packaging | ⬜ not started |
 
+### Milestone 2 at a glance
+
+```bash
+# Idempotent checkout (Idempotency-Key required) — returns 202 + Location
+curl -i -X POST http://127.0.0.1:8000/api/v1/orders \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Idempotency-Key: 6f1d0d6e-2a5c-4a4e-9b3a-1f4f0f7c9a11" \
+  -H 'Content-Type: application/json' \
+  -d '{"restaurant_id":"rest_bella_napoli","delivery_address":"12 Lake Road, Bengaluru","items":[{"menu_item_id":"item_margherita_pizza","quantity":2}]}'
+
+# Re-running with the same key + payload returns the SAME response (no new
+# order/event); a changed payload returns 409. See docs/api.md for semantics.
+```
+
+Acceptance evidence (live-stack captures + test output):
+[`docs/evidence/m2/`](docs/evidence/m2/).
+
 ### Known limitations (honest status)
 
 - **iOS is not built**: this host is Linux without Xcode. Android/Web targets are
   scaffolded; the Android SDK is installed in Milestone 5 by agreement.
 - Worker processes currently verify the database, log a heartbeat and **idle** —
-  message consumption arrives with Milestone 3.
+  message consumption, the outbox dispatcher and `order.paid`/failure events
+  arrive with Milestone 3. Committed `order.created` rows therefore sit `PENDING`
+  in the outbox until then (by design, and proven harmless to acceptance).
+- `GET /orders/{id}/notifications` (Milestone 3) and the admin endpoints
+  (Milestone 6) are not served yet.
 - The Flutter shell renders home + not-found only; feature screens arrive with M5.
 - No licensed assets are used. Screenshots and the Dribbble reference are visual
   inspiration only.
