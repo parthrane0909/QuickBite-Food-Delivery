@@ -1,0 +1,25 @@
+Milestone 5 — OpenAPI regeneration check
+========================================
+
+docs/openapi.json is generated from the running FastAPI app:
+  curl -s http://127.0.0.1:8000/openapi.json > docs/openapi.json
+
+documented version: 2.0.0
+path count: 12
+  GET          /api/v1/admin/orders
+  GET          /api/v1/admin/summary
+  POST         /api/v1/auth/login
+  GET          /api/v1/me
+  GET,POST     /api/v1/orders
+  GET          /api/v1/orders/{order_id}
+  GET          /api/v1/orders/{order_id}/history
+  GET          /api/v1/orders/{order_id}/notifications
+  GET          /api/v1/restaurants
+  GET          /api/v1/restaurants/{restaurant_id}/menu
+  GET          /health/live
+  GET          /health/ready
+
+admin paths present: 2 -> ['/api/v1/admin/orders', '/api/v1/admin/summary']
+
+diff against the live server (should be empty):
+  (identical path sets — openapi.json is current)

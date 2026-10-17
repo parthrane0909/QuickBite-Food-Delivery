@@ -1,0 +1,38 @@
+Milestone 5 — UI behaviour evidence from the widget suite
+(the REAL app over fakes at the data boundary; test/widget/)
+
+$ flutter test test/widget/checkout_test.dart --reporter expanded
+  00:00 +0: loading /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/checkout_test.dart
+  00:00 +0: empty cart shows the nothing-to-check-out state
+  00:01 +1: address is required before any request is sent
+  00:01 +2: timeout keeps the key: retry re-sends the IDENTICAL request, then succeeds
+  00:02 +3: discarding an uncertain attempt asks for confirmation
+  00:02 +4: a 409 idempotency conflict surfaces and can be discarded
+  00:02 +5: a definite 4xx rejection auto-discards the attempt
+  00:03 +6: a 401 keeps the attempt so it can resume after re-login
+  00:03 +7: a successful checkout clears the ordered lines
+  00:03 +8: the server-issued total is shown on the acknowledgement
+  00:03 +9: All tests passed!
+
+$ flutter test test/widget/orders_test.dart --reporter expanded
+  00:00 +0: loading /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/orders_test.dart
+  00:00 +0: Acknowledgement deep-linked ack without acceptance state forwards to tracking
+  00:01 +1: Live tracking polls every 2 seconds and stops at the terminal state
+  00:01 +2: Live tracking polling backs off exponentially while errors persist
+  00:01 +3: Live tracking a failed order surfaces the server failure reason
+  00:02 +4: Live tracking manual refresh re-fetches immediately
+  00:02 +5: Live tracking per-order notifications are shown
+  00:02 +6: Order history lists the customer orders and applies the status filter
+  00:02 +7: Order history shows the empty state when no orders were placed
+  00:03 +8: Order history shows a filter-specific empty state
+  00:03 +9: All tests passed!
+
+Key demonstrations:
+  - timeout/connection loss -> UNCERTAIN: same Idempotency-Key re-sent, no double order
+  - 409 conflict surfaced with an explicit discard-and-restart path
+  - definite 4xx auto-discards the attempt (safe to start fresh)
+  - 401 keeps the attempt so checkout resumes after re-login
+  - tracking polls ~2s, stops on terminal state, backs off on errors,
+    and stops on dispose/background/auth-loss (timer tests)
+  - failed orders are readable in the UI with the server's failure_reason
+  - notification delivery failure is NEVER shown as a payment failure

@@ -6,12 +6,14 @@ simulated asynchronous pipeline (payment → restaurant → delivery → notific
 while an admin observes read-only aggregates. **PostgreSQL is the sole source of
 truth**; RabbitMQ only distributes work.
 
-> Status: **Milestone 4 (Durable Retries, Quarantine, Deterministic Failure
-> Simulation, Crash Recovery) complete**, pending milestone approval. See
+> Status: **Milestone 5 (Complete Flutter Frontend — Android/Web, Admin
+> Overview, Platform Builds) complete**, pending milestone approval. See
 > [Milestones](#milestones) for what is and is not implemented yet. API
 > contract: [`docs/api.md`](docs/api.md); events/routing:
 > [`docs/event-contract.md`](docs/event-contract.md); reliability:
-> [`docs/reliability.md`](docs/reliability.md).
+> [`docs/reliability.md`](docs/reliability.md); frontend:
+> [`docs/frontend.md`](docs/frontend.md); platforms:
+> [`docs/platforms.md`](docs/platforms.md).
 
 ## Stack (pinned)
 
@@ -29,17 +31,23 @@ truth**; RabbitMQ only distributes work.
 
 ```
 backend/            FastAPI app (app/), Alembic migrations (migrations/), tests, workers
-frontend/           Flutter app (lib/app, lib/core, lib/features — grows per milestone)
+frontend/           Flutter app (Android / Web / iOS targets; lib/app, lib/core,
+                    lib/features, widget tests, emulator integration test)
 compose.yaml        postgres, rabbitmq, api, migrate, seed, topology-init,
-                    outbox-dispatcher, retry-scheduler, 4 independent workers
+                    outbox-dispatcher, retry-scheduler, 4 independent workers,
+                    web (nginx SPA host, port 8080)
 infra/rabbitmq.conf Broker configuration
+infra/web-nginx.conf    nginx config for the Flutter web SPA (SPA fallback)
 docs/api.md         API contract: pagination, errors, money, idempotency, notifications
 docs/event-contract.md   Envelope, the six event types, routing, retry + dead-letter rules
 docs/architecture.md     Runtime components, data flow, module map
 docs/reliability.md      Delivery semantics, retry/quarantine lifecycle, crash windows, limits
+docs/frontend.md        Flutter architecture: state, networking, idempotency UX, polling
+docs/platforms.md     Clean install + web/Android/iOS build & run commands (iOS pending)
 docs/openapi.json   Exported OpenAPI document (regenerate: scripts note inside docs/api.md)
-docs/evidence/      Per-milestone run evidence (m1/, m2/, m3/, m4/, …)
-scripts/            Reproducible evidence capture (capture_m2..m4_evidence.sh) and
+docs/evidence/      Per-milestone run evidence (m1/, m2/, m3/, m4/, m5/, …)
+scripts/            Reproducible evidence capture (capture_m2..m4_evidence.sh),
+                    web build (build_web.sh), Android SDK setup, food-image generator,
                     reviewed crash/failure overrides (crash-overrides/*.yaml)
 backend/scripts/    inspect_state.py (backlog inspection), demo_failures.py (failure demos)
 .env.example        Full configuration template (copy to .env; real .env is git-ignored)
@@ -63,6 +71,7 @@ Services (bound to `127.0.0.1` only):
 | http://127.0.0.1:8000/health/ready | Readiness (PostgreSQL required, RabbitMQ reported) |
 | http://127.0.0.1:8000/openapi.json | Versioned OpenAPI (`/api/v1/...`) |
 | http://127.0.0.1:15672 | RabbitMQ management UI |
+| http://localhost:8080 | Flutter web SPA (nginx, built by `./scripts/build_web.sh`) |
 
 ### Demo accounts (seeded, fictional)
 
@@ -111,10 +120,21 @@ docker compose run --rm api python -m scripts.demo_failures --list
 docker compose exec rabbitmq rabbitmqctl list_bindings -q source_name destination_name routing_key
 docker compose exec rabbitmq rabbitmqctl list_queues -q name messages consumers
 
-# Flutter (web during development)
+# Flutter: static checks and the widget/DTO suite (75 tests)
 cd frontend
 flutter pub get && flutter analyze && flutter test
-flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
+
+# Web dev server (browser calls the API directly; CORS allows :8080)
+cd frontend
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000/api/v1
+
+# Release web build + nginx SPA hosting in Compose (UI at http://localhost:8080)
+./scripts/build_web.sh
+
+# Android: build the debug APK and run the end-to-end integration test
+cd frontend
+flutter build apk --debug --dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1
+flutter test integration_test/app_flow_test.dart -d emulator-5554
 
 # Reproduce this milestone's live evidence (stack must be up):
 ./scripts/capture_m4_evidence.sh        # writes docs/evidence/m4/
@@ -137,8 +157,8 @@ per-worker host ports: `docker compose up -d --scale payment-worker=3`.
 | 1 | Foundation: repo, Compose, migrations, seed, auth, health, worker scaffolds, Flutter shell | ✅ approved |
 | 2 | Browsing, server-priced idempotent checkout, order reads, ownership, transactional outbox | ✅ approved |
 | 3 | Outbox dispatcher, broker topology, four consumers, notifications endpoint | ✅ approved |
-| 4 | Durable retries, quarantine, failure simulation, crash recovery | ✅ complete, awaiting approval |
-| 5 | Full Flutter UI (Android/Web) | ⬜ not started |
+| 4 | Durable retries, quarantine, failure simulation, crash recovery | ✅ approved |
+| 5 | Complete Flutter UI (Android/Web), admin overview, platform builds | ✅ complete, awaiting approval |
 | 6 | Admin, hardening, docs, final verification | ⬜ not started |
 | 7 | Submission packaging | ⬜ not started |
 
@@ -224,23 +244,69 @@ paths, quarantine dedup, four crash checkpoints, SIGKILL ×3, broker outage,
 logs, tests, lint):
 [`docs/evidence/m4/`](docs/evidence/m4/).
 
+### Milestone 5 at a glance
+
+The Flutter app now covers the complete customer journey and a read-only
+admin dashboard, on phone and desktop layouts:
+
+```bash
+# Web SPA behind nginx (SPA fallback for deep links, port matches CORS)
+./scripts/build_web.sh                     # then open http://localhost:8080
+
+# Android debug APK + end-to-end integration flow on the emulator
+cd frontend
+flutter build apk --debug --dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1
+flutter test integration_test/app_flow_test.dart -d emulator-5554
+
+# Full frontend suite: analyzer + 75 widget/DTO tests
+flutter analyze && flutter test
+```
+
+Highlights (details in [`docs/frontend.md`](docs/frontend.md)):
+
+- **Screens**: sign-in, restaurant list, menu, cart (single-restaurant,
+  quantities clamped to the server's 1..20), checkout, acceptance, live
+  tracking with per-order notifications, order history with status
+  filters, and an admin overview (cross-customer list + operations
+  summary) that is unreachable for customers.
+- **Safe checkout**: the idempotency key is persisted before the request;
+  timeouts/network errors keep the same key for a safe retry, 4xx
+  definite failures discard it, 409 surfaces a conflict with an explicit
+  discard path, and the in-flight submit is disabled.
+- **Honest tracking**: ~2 s polling only while visible — stopped on
+  terminal state, dispose, backgrounding and auth loss, with exponential
+  backoff on errors; a "202 accepted" is never presented as paid/delivered.
+- **New admin endpoints**: `GET /api/v1/admin/orders` and
+  `GET /api/v1/admin/summary` (admin-only; customers get 403).
+- **Platforms**: web + Android validated with evidence; **iOS build
+  documented and pending** (no macOS host — see
+  [`docs/platforms.md`](docs/platforms.md)).
+
+Acceptance evidence (backend suite, widget/DTO suite, integration flow on
+the emulator, web build + nginx deep-link reload, CORS, screenshots,
+admin access control):
+[`docs/evidence/m5/`](docs/evidence/m5/).
+
 ### Known limitations (honest status)
 
-- **iOS is not built**: this host is Linux without Xcode. Android/Web targets are
-  scaffolded; the Android SDK is installed in Milestone 5 by agreement.
+- **iOS is not built or run**: this host is Linux without Xcode. The iOS
+  target is the standard Flutter scaffolding; the exact macOS build/run
+  procedure is documented in [`docs/platforms.md`](docs/platforms.md) and
+  validation is explicitly pending — iOS is not claimed complete.
 - A physical broker restart is proven by the evidence scripts
   (`docs/evidence/m3/05_broker_restart_no_loss.txt`,
   `docs/evidence/m4/14_broker_outage_pending_retries.txt` — the latter with a
   pending retry) rather than inside pytest, which shares one broker container;
   the connection-loss class is covered by tests.
-- `GET /admin/orders` and `GET /admin/summary` (admin endpoints) are not served
-  yet — due no later than Milestone 5 (milestone agreement).
-- The Flutter shell renders home + not-found only; feature screens arrive with M5.
+- The Flutter app implements no search, category filter (the catalog API
+  has no category field), coupons, payments UI, maps/ratings/chat — those
+  backend capabilities do not exist and nothing is fabricated.
 - Failure simulations and crash checkpoints are **environment/process-only**
   controls (compose overrides, demo script); they are rejected outside test
   mode where appropriate and never reachable from API/checkout fields.
 - No licensed assets are used. Screenshots and the Dribbble reference are visual
-  inspiration only.
+  inspiration only; food imagery is generated by a committed script and the
+  bundled font is OFL-licensed.
 
 ## Security notes
 

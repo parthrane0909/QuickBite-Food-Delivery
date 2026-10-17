@@ -189,6 +189,31 @@ services:
       topology-init:
         condition: service_completed_successfully
 
+  # Milestone 5: Flutter web SPA served as static files behind nginx.
+  #
+  # The build is produced on the host (scripts/build_web.sh) with
+  #   --dart-define=API_BASE_URL=http://localhost:8000/api/v1
+  # and copied into ./frontend/build/web, which this service mounts read-only.
+  # nginx is pinned to the same image family as the rest of the stack.
+  # Port 8080 matches the API's default CORS allow-list, so the browser calls
+  # the API directly — no proxy, no secrets in the bundle. The nginx config
+  # provides the SPA fallback so deep links survive a hard reload.
+  web:
+    image: nginx:1.30.6-alpine
+    volumes:
+      - ./frontend/build/web:/usr/share/nginx/html:ro
+      - ./infra/web-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/index.html >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    restart: unless-stopped
+
 volumes:
   pgdata:
   rabbitmqdata:

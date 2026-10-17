@@ -1,4 +1,4 @@
-# QuickBite Architecture (Milestone 4)
+# QuickBite Architecture (Milestone 5)
 
 PostgreSQL is the sole source of truth; RabbitMQ only distributes work.
 Everything below is reproducible from `compose.yaml`.
@@ -6,6 +6,10 @@ Everything below is reproducible from `compose.yaml`.
 ## Runtime components
 
 ```
+   ┌─────────────── client boundary (Milestone 5) ────────────────┐
+   │ Flutter app: Android / Web (nginx `web`, :8080) / iOS (pending)│
+   │   HTTP + bearer token only — no broker/DB knowledge, no secrets │
+   └──────────────────────────┬───────────────────────────────────┘
                        127.0.0.1:8000
  client ── HTTP ──▶ api (FastAPI, uvicorn)
                       │  checkout: ONE tx → orders + items + history +
@@ -57,10 +61,11 @@ Everything below is reproducible from `compose.yaml`.
 | `rabbitmq` | Work distribution only (management UI on `127.0.0.1:15672`) |
 | `migrate` / `seed` | One-shots: schema (0001 + 0002) → idempotent demo data |
 | `topology-init` | One-shot: declares exchanges/queues/bindings **before** any publisher/consumer starts |
-| `api` | FastAPI: auth, menu, checkout, order reads, notifications endpoint, health |
+| `api` | FastAPI: auth, menu, checkout, order reads, notifications endpoint, **admin orders + summary (M5)**, health |
 | `outbox-dispatcher` | Separate process loop publishing committed outbox rows (topic events, targeted retries, dead publications) |
 | `retry-scheduler` | Separate DB-only process activating due retries; crash-recovering, `SKIP LOCKED` (multi-instance safe); absence only delays retries |
 | `payment/restaurant/delivery/notification-worker` | Four independent processes, one stage each, freely scalable |
+| `web` | nginx hosting the built Flutter SPA (static files, SPA deep-link fallback; browser calls the API directly under CORS) |
 
 Startup order is enforced in compose: postgres → migrate → seed; rabbitmq →
 `topology-init` → dispatcher + retry-scheduler + workers (all also wait on
@@ -116,6 +121,7 @@ state and never change order status.
 | `app/services/*_service.py` | Stage decisions (payment/restaurant/delivery/notification), protected simulation modes |
 | `app/services/transitions.py` | State machine transitions + `emit_outbox_event` |
 | `app/services/processing.py` | The shared one-transaction stage runner |
+| `app/services/admin_service.py` | Cross-customer order page + operations summary (counters only) |
 | `app/repositories/processed_events.py` | Dedup markers |
 | `scripts/init_topology.py` | The `topology-init` entrypoint |
 | `scripts/inspect_state.py` | Operational backlog inspection (outbox/retry/quarantine/queue depths) |

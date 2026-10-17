@@ -1,0 +1,31 @@
+Milestone 5 — iOS validation status
+===================================
+
+Status: PENDING — not built, not run, not claimed complete.
+
+Reason: this is a Linux development host (see uname -a below). Apple's
+Xcode toolchain, the iOS Simulator, and code signing require macOS, so no
+iOS artifact was produced or validated in this environment.
+
+  $ uname -srm
+  Linux 7.0.0-38-generic x86_64
+
+Documented procedure (docs/platforms.md, 'iOS' section):
+  1. On macOS with Xcode installed: flutter create . --platforms=ios
+     (generates ios/ from the existing Flutter project)
+  2. Set the API base URL for the simulator (host loopback):
+       flutter run -d <ios-simulator> --dart-define=API_BASE_URL=http://127.0.0.1:8000/api/v1
+  3. Widget + integration suites are platform-independent and already green:
+     flutter test            # 75 tests
+     flutter test integration_test -d <ios-simulator>
+  4. Release: flutter build ios --no-codesign
+
+What is already valid for iOS without a Mac:
+  - All business logic, routing, providers, and screens are pure Dart
+    (shared across platforms; covered by the 75-test widget suite).
+  - Token storage uses conditional imports: Keychain on iOS/Android,
+    in-memory on web (lib/core/security/token_storage*.dart).
+  - No platform channel or Android-only API is used for app behaviour.
+
+Explicitly NOT done here: ios/ project generation, Simulator runs,
+device runs, TestFlight/App Store artifacts.

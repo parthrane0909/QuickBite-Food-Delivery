@@ -33,9 +33,13 @@ Base path: `/api/v1` (health probes are unversioned: `/health/live`,
 | `GET /api/v1/orders/{id}` | Owner or admin | Current state, items, totals, failure details, version, timestamps |
 | `GET /api/v1/orders/{id}/history` | Owner or admin | Append-only, version-ordered transition timeline (single page; history is bounded at 7 entries by the state machine) |
 | `GET /api/v1/orders/{id}/notifications` | Owner or admin | Paginated notification timeline for the order (see below) |
+| `GET /api/v1/admin/orders` | Admin | Paginated **cross-customer** order list; each row adds `customer_email` to the shared order-summary shape. Optional exact `status` filter (invalid value → 422) |
+| `GET /api/v1/admin/summary` | Admin | Operations snapshot: `orders_by_status` (all six statuses, zeros included), `pending_outbox_events`, `retry_backlog`, `quarantine_records`, `generated_at` (DB clock) |
 
-*Planned in a later milestone:* `GET /admin/orders` and `GET /admin/summary`
-(Milestone 6 at the latest). Until then they return 404/403 per the role guards.
+Admin responses expose counters only — never tokens, password material or
+outbox payload bodies. Customers get `403` and anonymous callers `401`,
+matching the role guards used everywhere else. The read-only admin dashboard
+in the Flutter app consumes exactly these two endpoints.
 
 ## Notifications: `GET /api/v1/orders/{id}/notifications`
 

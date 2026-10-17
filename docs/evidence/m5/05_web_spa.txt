@@ -1,0 +1,20 @@
+Web SPA evidence (nginx 1.30.6-alpine hosting the Flutter release build)
+built: 2026-10-17T13:58:25Z by scripts/build_web.sh
+
+GET /                       -> 200
+GET /orders/order_probe     -> 200  (SPA fallback: deep link reload returns index.html)
+GET /main.dart.js           -> 200
+GET /no/such/route          -> 200  (unknown paths also fall back)
+
+Compiled API base URL in bundle (expect 1+ hits of localhost:8000/api/v1):
+  main.dart.js: 3 hit(s)
+
+Secret scan of the shipped bundle (all must be 0):
+  amqp:// urls:              0
+  postgres:// urls:          0
+  seeded demo passwords:     0
+  JWT secret material:       0
+
+Cache headers:
+  index.html:    Cache-Control: no-cache
+  main.dart.js:  Cache-Control: public, max-age=31536000, immutable

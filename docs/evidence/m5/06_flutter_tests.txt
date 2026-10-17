@@ -1,0 +1,15 @@
+flutter Flutter 3.47.7 • channel stable • https://github.com/flutter/flutter.git
+
+$ flutter analyze
+Analyzing frontend...                                           
+No issues found! (ran in 3.4s)
+
+$ flutter test   # widget + DTO contract suites (fakes at the data boundary)
+00:14 +74: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/cart_test.dart: proceeding to checkout carries the cart
+00:15 +75: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/cart_test.dart: (tearDownAll)
+00:15 +75: All tests passed!
+
+$ flutter test integration_test/app_flow_test.dart -d emulator-5554  # see 08
+  All tests passed! (customer journey, 14s on the emulator — log in 08)
+$ flutter test integration_test/screenshot_tour_test.dart -d emulator-5554  # see screens_android/
+  All tests passed! (15 captures — log in 09)

@@ -1,0 +1,161 @@
+/// Login screen widget tests (M5 §3): inline validation, distinct
+/// invalid-credential vs timeout vs network messaging, success navigation
+/// via the role redirect, session-expiry notice and sign-out.
+library;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:quickbite/core/network/api_exception.dart';
+import 'package:quickbite/state/auth_controller.dart';
+
+import '../helpers/fakes.dart';
+import '../helpers/harness.dart';
+
+Future<void> _openLogin(WidgetTester tester, TestBackend backend) async {
+  await pumpApp(tester, backend);
+  expect(find.byType(TextFormField), findsNWidgets(2), reason: 'email + password');
+}
+
+Future<void> _submit(
+  WidgetTester tester, {
+  required String email,
+  required String password,
+}) async {
+  await tester.enterText(find.byType(TextFormField).at(0), email);
+  await tester.enterText(find.byType(TextFormField).at(1), password);
+  await tester.pump();
+  await tester.tap(find.widgetWithText(FilledButton, 'Sign In'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
+  await settleAuth(tester);
+}
+
+void main() {
+  setUpAll(initTestLocale);
+  setUp(resetPrefs);
+
+  testWidgets('validates email and password before any network call',
+      (tester) async {
+    final backend = TestBackend();
+    await _openLogin(tester, backend);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign In'));
+    await tester.pump();
+
+    expect(find.text('Enter your email address.'), findsOneWidget);
+    expect(find.text('Enter your password.'), findsOneWidget);
+    expect(backend.auth.loginCalls, 0, reason: 'no call on invalid form');
+  });
+
+  testWidgets('rejects a malformed email address', (tester) async {
+    final backend = TestBackend();
+    await _openLogin(tester, backend);
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'not-an-email');
+    await tester.pump();
+
+    expect(find.text('Enter a valid email address.'), findsOneWidget);
+    expect(backend.auth.loginCalls, 0);
+  });
+
+  testWidgets('shows the invalid-credentials message for INVALID_CREDENTIALS',
+      (tester) async {
+    final backend = TestBackend()
+      ..auth.loginError = const ApiException(
+        code: 'INVALID_CREDENTIALS',
+        statusCode: 401,
+        message: 'Invalid email or password',
+      );
+    await _openLogin(tester, backend);
+
+    await _submit(
+      tester,
+      email: 'alice@quickbite.dev',
+      password: 'wrong-password',
+    );
+
+    expect(find.text('Email or password is incorrect.'), findsOneWidget);
+    expect(backend.auth.loginCalls, 1);
+    expect(find.byType(TextFormField), findsNWidgets(2), reason: 'still on login');
+  });
+
+  testWidgets('distinguishes a timeout from other failures', (tester) async {
+    final backend = TestBackend()
+      ..auth.loginError = const ApiException(
+        code: 'timeout',
+        statusCode: null,
+        message: 'No response within 15s',
+      );
+    await _openLogin(tester, backend);
+
+    await _submit(tester, email: 'alice@quickbite.dev', password: 'quickbite!alice1');
+
+    expect(
+      find.text('The server took too long to respond. Try again.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('distinguishes a network failure from other failures',
+      (tester) async {
+    final backend = TestBackend()
+      ..auth.loginError = const ApiException(
+        code: 'network_error',
+        statusCode: null,
+        message: 'Connection refused',
+      );
+    await _openLogin(tester, backend);
+
+    await _submit(tester, email: 'alice@quickbite.dev', password: 'quickbite!alice1');
+
+    expect(
+      find.text('Cannot reach the server. Check your connection.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('successful sign-in lands the customer on the restaurant list',
+      (tester) async {
+    final backend = TestBackend();
+    await _openLogin(tester, backend);
+
+    await _submit(tester, email: 'alice@quickbite.dev', password: 'quickbite!alice1');
+
+    expect(backend.auth.loginCalls, 1);
+    expect(find.text('Bella Napoli'), findsOneWidget, reason: 'catalog home');
+  });
+
+  testWidgets('a global 401 returns to login with the expiry notice',
+      (tester) async {
+    final backend = TestBackend();
+    await backend.signIn();
+    final container = await pumpApp(tester, backend);
+    expect(find.text('Bella Napoli'), findsOneWidget, reason: 'signed in');
+
+    container.read(authControllerProvider.notifier).handleUnauthorized();
+    await tester.pump();
+    await settleAuth(tester);
+
+    expect(find.text('Your session expired. Please sign in again.'), findsOneWidget);
+    await unmountApp(tester);
+  });
+
+  testWidgets('sign out asks for confirmation and returns to login',
+      (tester) async {
+    final backend = TestBackend();
+    await backend.signIn();
+    await pumpApp(tester, backend);
+    expect(find.text('Bella Napoli'), findsOneWidget);
+
+    await tester.tap(find.text('Sign out'));
+    await tester.pump();
+    expect(find.text('Sign out?'), findsOneWidget);
+    expect(find.text('You will need to sign in again to browse QuickBite.'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign out'));
+    await tester.pump();
+    await settleAuth(tester);
+
+    expect(find.byType(TextFormField), findsNWidgets(2), reason: 'back on login');
+  });
+}

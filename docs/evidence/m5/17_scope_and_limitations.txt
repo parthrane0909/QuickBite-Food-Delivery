@@ -1,0 +1,42 @@
+Milestone 5 — scope adherence & known limitations
+=================================================
+
+1. Out-of-scope features ABSENT from the Flutter app (grep of frontend/lib):
+   search UI            0 hit(s)
+   categories row       0 hit(s)
+   coupons/promos       0 hit(s)
+   payment methods      0 hit(s)
+   maps                 0 hit(s)
+   social login         0 hit(s)
+   chat/messaging       0 hit(s)
+   ratings/reviews      2 hit(s)  <- the two constraint comments listed in 2. below
+   (word-boundary patterns; no UI, route, provider or widget exists for any)
+
+2. No fabricated domain data (ratings / delivery times / fees):
+   2 hit(s) total — every one is a CONSTRAINT comment, e.g.:
+     features/restaurants/widgets/restaurant_card.dart:/// no ratings, delivery times or fees are invented (the con
+     data/dto/catalog_dto.dart:/// ratings, delivery estimates or cuisine chips; the UI must not fabricate
+   Prices come only from menu DTOs; order totals only from the server.
+
+3. Secrets scan — scoped honestly:
+   Flutter app (frontend/**):        0 file(s) with connection strings or seeded passwords -> CLEAN
+   .env.example                     1 file(s): local-dev template/config/tests/evidence (documented dev values, no production secret)
+   backend/                         4 file(s): local-dev template/config/tests/evidence (documented dev values, no production secret)
+   docs/                            3 file(s): local-dev template/config/tests/evidence (documented dev values, no production secret)
+   seeded demo passwords:            documented on purpose in README, seed script, tests, evidence scripts (6 files)
+   committed .env files:             0
+   committed keystores:              0
+   build artifacts tracked:          0
+   Android SDK/gradle caches tracked: 0
+
+4. Backend mutation surface unchanged in M5 (admin is READ-ONLY):
+   total write methods: POST /api/v1/auth/login, POST /api/v1/orders
+   admin write methods: NONE (read-only, as scoped)
+
+5. Known limitations carried into M5:
+   - iOS build/run PENDING (Linux host; procedure in docs/platforms.md).
+   - No search/categories/coupons/payments/maps/social — backend has none.
+   - Web token storage is in-memory by design (no secure web store); a
+     reload signs the user out on web; sessions persist on mobile.
+   - Admin dashboard is READ-ONLY: no status mutations exist client-side.
+   - Restaurant catalog is server-seeded; no restaurant CRUD in scope.

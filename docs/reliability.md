@@ -185,9 +185,11 @@ field are unaffected, so a customer can never trigger or steer a failure:
 ## Known limitations / deferred
 
 1. **Admin endpoints** (`/api/v1/admin/orders`, `/api/v1/admin/summary`) are
-   not served yet — due by Milestone 5 at the latest (milestone agreement).
-2. **Flutter feature screens** arrive with M5; Android SDK likewise. iOS stays
-   pending (Linux host, no Xcode) — never claimed complete.
+   served since Milestone 5 (admin-only role guard; customers receive 403)
+   and are covered by `backend/tests/test_admin_api.py`.
+2. **iOS build/run stays pending** (Linux host, no Xcode) — the procedure is
+   documented in `docs/platforms.md`; never claimed complete. Web and
+   Android are built and validated with evidence under `docs/evidence/m5/`.
 3. **A physical broker restart is not part of pytest** (the suite shares one
    broker container); the connection-loss class is covered by tests and the
    physical outage — including with a pending retry — is proven live in

@@ -1,6 +1,157 @@
 {
   "components": {
     "schemas": {
+      "AdminOrderItem": {
+        "description": "One cross-customer order row: the standard order summary plus the\nordering customer's email (admin-only field; never exposed to customers).",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "customer_email": {
+            "title": "Customer Email",
+            "type": "string"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "restaurant_id": {
+            "title": "Restaurant Id",
+            "type": "string"
+          },
+          "restaurant_name": {
+            "title": "Restaurant Name",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total_amount_minor": {
+            "minimum": 0.0,
+            "title": "Total Amount Minor",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "restaurant_id",
+          "restaurant_name",
+          "status",
+          "currency",
+          "total_amount_minor",
+          "version",
+          "created_at",
+          "updated_at",
+          "customer_email"
+        ],
+        "title": "AdminOrderItem",
+        "type": "object"
+      },
+      "AdminOrderPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminOrderItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total"
+        ],
+        "title": "AdminOrderPage",
+        "type": "object"
+      },
+      "AdminSummary": {
+        "description": "Aggregate operational counts from authoritative PostgreSQL state.\n\nCounting semantics (documented in docs/api.md):\n- orders_by_status: COUNT(*) of the orders table grouped by status; every\n  status appears (0 included).\n- pending_outbox_events: outbox rows not yet confirmed published\n  (state IN ('PENDING','CLAIMED')) \u2014 includes leased in-flight rows and\n  crash-orphaned leases still awaiting redelivery.\n- retry_backlog: retry_jobs rows still scheduled (state='PENDING') \u2014\n  attempts neither published nor exhausted.\n- quarantine_records: total terminally failed deliveries on record.",
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "orders_by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Order counts keyed by every order status (0 included).",
+            "title": "Orders By Status",
+            "type": "object"
+          },
+          "pending_outbox_events": {
+            "minimum": 0.0,
+            "title": "Pending Outbox Events",
+            "type": "integer"
+          },
+          "quarantine_records": {
+            "minimum": 0.0,
+            "title": "Quarantine Records",
+            "type": "integer"
+          },
+          "retry_backlog": {
+            "minimum": 0.0,
+            "title": "Retry Backlog",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "orders_by_status",
+          "pending_outbox_events",
+          "retry_backlog",
+          "quarantine_records",
+          "generated_at"
+        ],
+        "title": "AdminSummary",
+        "type": "object"
+      },
       "CheckoutItemIn": {
         "additionalProperties": false,
         "properties": {
@@ -903,6 +1054,109 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/orders": {
+      "get": {
+        "description": "Paginated cross-customer order listing (newest first); optional exact\nstatus filter. Read-only: no order mutation is exposed anywhere.",
+        "operationId": "list_all_orders_api_v1_admin_orders_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "PENDING",
+                    "PAID",
+                    "CONFIRMED",
+                    "DRIVER_ASSIGNED",
+                    "PAYMENT_FAILED",
+                    "FAILED"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOrderPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List All Orders",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/summary": {
+      "get": {
+        "description": "Aggregate counts from authoritative PostgreSQL state: orders grouped\nby status, unpublished outbox rows, scheduled retry backlog and\nquarantine records (exact semantics documented in docs/api.md).",
+        "operationId": "get_summary_api_v1_admin_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Summary",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "operationId": "login_api_v1_auth_login_post",

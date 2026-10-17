@@ -1,25 +1,34 @@
-/// Compile-time public configuration. No secrets are ever embedded here;
-/// values are injected with `--dart-define=API_BASE_URL=...` at build time.
-class AppConfig {
-  AppConfig._();
+/// Compile-time API base URL configuration (assignment §7).
+///
+/// The ONLY place the backend address is decided, injected once at build
+/// time:
+///
+///   flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1
+///
+/// Defaults to the host-loopback address that works for Android emulator
+/// targets and Linux desktop runs; browser builds must pass an explicit
+/// host-reachable URL (docs/platforms.md). Never contains secrets — only a
+/// public HTTP address.
+library;
 
-  /// Public API base URL. Defaults to the local Compose backend so the app
-  /// runs out of the box during development.
+abstract final class AppConfig {
+  /// Base URL including the /api/v1 prefix, no trailing slash.
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8000',
+    defaultValue: 'http://10.0.2.2:8000/api/v1',
   );
 
-  static bool get _looksLikeBaseUrl {
-    final uri = Uri.tryParse(apiBaseUrl);
-    return uri != null && uri.hasScheme && uri.host.isNotEmpty;
-  }
+  /// Single request timeout for every API call (assignment: timeout + safe
+  /// recovery). Checkout treats a timeout as an UNCERTAIN outcome and keeps
+  /// the idempotency key (see checkout_controller.dart).
+  static const Duration apiTimeout = Duration(seconds: 15);
 
-  /// Fails fast on boot if the injected base URL is malformed.
   static void validate() {
-    if (!_looksLikeBaseUrl) {
+    final uri = Uri.tryParse(apiBaseUrl);
+    if (uri == null || !uri.isAbsolute || uri.host.isEmpty) {
       throw StateError(
-        'Invalid API_BASE_URL "$apiBaseUrl": expected an absolute http(s) URL.',
+        'Invalid API_BASE_URL "$apiBaseUrl". Pass a full absolute URL, e.g. '
+        '--dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1',
       );
     }
   }
