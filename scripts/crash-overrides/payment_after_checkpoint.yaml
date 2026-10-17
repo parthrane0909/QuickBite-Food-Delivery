@@ -1,0 +1,7 @@
+# M4 crash demo: worker dies (exit 70) AFTER commit but BEFORE ack — the
+# classic double-processing window. Recovery redelivery must deduplicate.
+services:
+  payment-worker:
+    restart: "no"
+    environment:
+      PAYMENT_MODE: crash_after_checkpoint

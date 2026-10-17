@@ -12,7 +12,7 @@
 # Milestone 3: topology-init one-shot (idempotent declarations) + the outbox
 # dispatcher process; workers and dispatcher gate on topology-init so nothing
 # publishes before exchanges/queues/bindings exist.
-# Milestone 4 adds: retry-scheduler service.
+# Milestone 4: retry-scheduler service (durable delayed retries).
 # Milestone 5 adds: web (Flutter SPA) service.
 name: quickbite
 
@@ -103,6 +103,21 @@ services:
       rabbitmq:
         condition: service_healthy
       topology-init:
+        condition: service_completed_successfully
+
+  # Retry scheduler (Milestone 4): claims DUE retry_jobs (SKIP LOCKED — safe
+  # with any number of instances) and makes their scheduled, TARGETED outbox
+  # publications eligible in the same transaction, then logs the retry and
+  # quarantine backlog. Pure PostgreSQL process (no broker connection). Its
+  # absence can delay activation but never lose retries: every retry row also
+  # carries its own due available_at that the dispatcher honours.
+  retry-scheduler:
+    <<: *backend
+    command: ["python", "-m", "app.messaging.retry_scheduler"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
         condition: service_completed_successfully
 
   # --- API (the only Flutter-facing backend) ------------------------------

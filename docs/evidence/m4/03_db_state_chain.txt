@@ -1,0 +1,43 @@
+                       event_id                       |      event_type       |     exchange     |      routing_key      | state | attempts 
+------------------------------------------------------+-----------------------+------------------+-----------------------+-------+----------
+ evt_paid_e909bd27ae2f4bf18cbfb5e1b01f9f07            | order.paid            | quickbite.orders | order.paid            | SENT  |        1
+ evt_confirmed_7067b6a740e941199083713c48d84419       | order.confirmed       | quickbite.orders | order.confirmed       | SENT  |        1
+ evt_driver_assigned_368e01cc401e4216be76edaa3e68262d | order.driver.assigned | quickbite.orders | order.driver.assigned | SENT  |        1
+ evt_created_fc1dcf277019447e94368c88f1c4fbda         | order.created         | quickbite.orders | order.created         | SENT  |        1
+(4 rows)
+
+ version | from_status |     status      | failure_code |   source   
+---------+-------------+-----------------+--------------+------------
+       1 |             | PENDING         |              | checkout
+       2 | PENDING     | PAID            |              | payment
+       3 | PAID        | CONFIRMED       |              | restaurant
+       4 | CONFIRMED   | DRIVER_ASSIGNED |              | delivery
+(4 rows)
+
+ consumer_name |                       event_id                       |  outcome  
+---------------+------------------------------------------------------+-----------
+ delivery      | evt_confirmed_7067b6a740e941199083713c48d84419       | PROCESSED
+ notification  | evt_driver_assigned_368e01cc401e4216be76edaa3e68262d | PROCESSED
+ notification  | evt_paid_e909bd27ae2f4bf18cbfb5e1b01f9f07            | PROCESSED
+ notification  | evt_created_fc1dcf277019447e94368c88f1c4fbda         | PROCESSED
+ notification  | evt_confirmed_7067b6a740e941199083713c48d84419       | PROCESSED
+ payment       | evt_created_fc1dcf277019447e94368c88f1c4fbda         | PROCESSED
+ restaurant    | evt_paid_e909bd27ae2f4bf18cbfb5e1b01f9f07            | PROCESSED
+(7 rows)
+
+ seq |         type          |                           message                            
+-----+-----------------------+--------------------------------------------------------------
+   1 | order.created         | Order order_37f5eef22259430b87c4e111673736c4 received — Bell
+   2 | order.paid            | Payment of INR 710.00 accepted for order order_37f5eef222594
+   3 | order.confirmed       | Bella Napoli confirmed order order_37f5eef22259430b87c4e1116
+   4 | order.driver.assigned | Driver Kabir Singh was assigned to order order_37f5eef222594
+(4 rows)
+
+ consumer_name | attempt | state | scheduled_after 
+---------------+---------+-------+-----------------
+(0 rows)
+
+ consumer_name | failure_code 
+---------------+--------------
+(0 rows)
+

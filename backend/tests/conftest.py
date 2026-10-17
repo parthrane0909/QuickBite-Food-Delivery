@@ -45,11 +45,20 @@ def _ensure_env_defaults() -> None:
     # Milestone 3: FORCED zero stage delays + fast outbox polling so the
     # pipeline harness is deterministic and fast. Real configured delays are
     # demonstrated by the live evidence script, not the test suite.
+    # Milestone 4: tiny bounded retry delays + fast scheduler polling; the
+    # documented DEFAULT retry timing (2s/10s/30s) is demonstrated by the
+    # live evidence script, never by the suite.
     os.environ["PAYMENT_DELAY_SECONDS"] = "0"
     os.environ["RESTAURANT_DELAY_SECONDS"] = "0"
     os.environ["DELIVERY_DELAY_SECONDS"] = "0"
     os.environ["NOTIFICATION_DELAY_SECONDS"] = "0"
     os.environ["OUTBOX_POLL_INTERVAL_SECONDS"] = "0.05"
+    os.environ["RETRY_DELAYS_SECONDS"] = "0.2,0.4,0.8"
+    os.environ["RETRY_MAX_ATTEMPTS"] = "4"
+    os.environ["RETRY_SCHEDULER_POLL_INTERVAL_SECONDS"] = "0.05"
+    # Physical crash demo controls can never fire inside the test process.
+    os.environ["CRASH_POINT"] = ""
+    os.environ["DISPATCHER_CRASH_AFTER_PUBLISH"] = "false"
 
 
 def _bootstrap_test_database() -> None:

@@ -1,0 +1,6 @@
+# M4 failure control: permanent restaurant rejection -> PAID -> FAILED with
+# RESTAURANT_REJECTED, no retry churn.
+services:
+  restaurant-worker:
+    environment:
+      RESTAURANT_MODE: always_fail

@@ -15,7 +15,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 VALID_ENVIRONMENTS = frozenset({"development", "test", "production"})
 VALID_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
-VALID_MODES = frozenset({"always_succeed", "fail_twice", "always_fail", "crash_after_checkpoint"})
+VALID_MODES = frozenset(
+    {"always_succeed", "fail_twice", "always_fail", "always_decline", "crash_after_checkpoint"}
+)
+# Environment-only crash checkpoints for physical crash-recovery demonstrations
+# (assignment §12: protected demo controls; NEVER selectable from checkout).
+VALID_CRASH_POINTS = frozenset({"", "before_commit", "during_retry_persistence"})
 _PLACEHOLDER_MARKERS = ("change-me", "replace-", "example-secret")
 
 
@@ -70,6 +75,17 @@ class Settings(BaseSettings):
 
     # --- Consumer runtime (Milestone 3): finite in-flight limit per channel ---
     worker_prefetch_count: int = Field(default=8, ge=1, le=64)
+
+    # --- Retry scheduler (Milestone 4): due retry_jobs activation cadence ---
+    retry_scheduler_poll_interval_seconds: float = Field(default=0.5, ge=0.05, le=30.0)
+    retry_scheduler_batch_size: int = Field(default=50, ge=1, le=1000)
+
+    # --- Physical crash-recovery demo controls (dev/test only; never checkout) ---
+    # Worker-side checkpoint: process exits (os._exit) at the chosen boundary.
+    crash_point: str = ""
+    # Dispatcher-side checkpoint: exit after a confirmed publish but BEFORE the
+    # SENT mark, to demonstrate the documented at-least-once redelivery window.
+    dispatcher_crash_after_publish: bool = False
 
     # ---------------- validators ----------------
 
@@ -146,6 +162,14 @@ class Settings(BaseSettings):
     @classmethod
     def _valid_notification_mode(cls, value: str) -> str:
         return cls._normalize_mode(value)
+
+    @field_validator("crash_point")
+    @classmethod
+    def _valid_crash_point(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in VALID_CRASH_POINTS:
+            raise ValueError(f"CRASH_POINT must be one of {sorted(VALID_CRASH_POINTS)}")
+        return normalized
 
     @field_validator("retry_delays_seconds")
     @classmethod

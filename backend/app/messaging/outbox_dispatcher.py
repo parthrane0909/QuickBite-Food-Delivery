@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
 import socket
 import uuid
@@ -33,6 +34,7 @@ from app.core.logging import configure_logging
 from app.db.models.outbox_event import OutboxEvent
 from app.db.session import dispose_engine, session_scope
 from app.messaging.publisher import Publisher, PublishError
+from app.repositories import messaging as messaging_repo
 
 logger = logging.getLogger("quickbite.outbox")
 
@@ -140,11 +142,21 @@ async def run_once(
 
     stats = {"claimed": len(rows), "sent": 0, "failed": 0}
     for row in rows:
-        target_exchange = f"{prefix}{row.exchange}" if prefix else row.exchange
+        if row.exchange == "":
+            # Targeted retry publication: DEFAULT exchange (empty name) with
+            # routing key = the FAILING queue's name — only that queue ever
+            # receives the retry (assignment §11). The retry job's target_queue
+            # IS the consumer's final queue name (namespaced in tests), so —
+            # exactly like topic routing keys — it is never re-prefixed here.
+            target_exchange = ""
+            routing_key = row.routing_key
+        else:
+            target_exchange = f"{prefix}{row.exchange}" if prefix else row.exchange
+            routing_key = row.routing_key
         try:
             await publisher.publish(
                 exchange=target_exchange,
-                routing_key=row.routing_key,
+                routing_key=routing_key,
                 payload=row.payload,
             )
         except PublishError as exc:
@@ -161,6 +173,27 @@ async def run_once(
                 },
             )
             continue
+        if get_settings().dispatcher_crash_after_publish:
+            # Protected crash-recovery demo control (assignment §12/§14):
+            # exit AFTER the confirmed publish but BEFORE the SENT mark, to
+            # demonstrate the documented at-least-once redelivery window.
+            if get_settings().environment == "test":
+                logger.critical(
+                    "dispatcher crash checkpoint reached (no exit under test)",
+                    extra={
+                        "event_id": row.event_id,
+                        "result": "crash_after_publish_simulated",
+                    },
+                )
+            else:
+                logger.critical(
+                    "dispatcher crash checkpoint: published but exiting BEFORE SENT",
+                    extra={
+                        "event_id": row.event_id,
+                        "result": "crash_after_publish_before_sent",
+                    },
+                )
+                os._exit(73)
         await _sent(row.id)
         stats["sent"] += 1
         logger.info(
@@ -169,12 +202,19 @@ async def run_once(
                 "event_id": row.event_id,
                 "order_id": row.order_id,
                 "result": "sent",
-                "exchange": target_exchange,
-                "routing_key": row.routing_key,
+                "exchange": target_exchange or "(default)",
+                "routing_key": routing_key,
             },
         )
     if stats["claimed"]:
         logger.info("dispatcher cycle complete", extra=stats)
+    async with session_scope() as session:
+        pending_age = await messaging_repo.oldest_pending_outbox_age_seconds(session)
+    if pending_age is not None and pending_age > 0:
+        logger.info(
+            "outbox backlog",
+            extra={"pending_outbox_age_s": round(pending_age, 2), "result": "backlog"},
+        )
     return stats
 
 

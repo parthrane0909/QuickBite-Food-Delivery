@@ -1,0 +1,41 @@
+PHYSICAL KILLS: docker compose kill payment-worker (SIGKILL, real signal)
+x3 during a fail_twice chain, then restart — at-least-once delivery with
+a single committed business effect, wherever the kill lands.
+HTTP/1.1 202 Accepted
+date: Sat, 17 Oct 2026 06:16:53 GMT
+server: uvicorn
+location: /api/v1/orders/order_6b82ade31ca6401cb2398691be0f8812
+content-length: 184
+content-type: application/json
+x-request-id: req_m4_a0027d43-668
+vary: Origin
+
+{"order_id":"order_6b82ade31ca6401cb2398691be0f8812","status":"PENDING","currency":"INR","total_amount_minor":71000,"version":1,"message":"Order accepted for asynchronous processing."}order: order_6b82ade31ca6401cb2398691be0f8812
+kill #1 sent at 2026-10-17T11:46:55+05:30  exit=137
+restart #1 sent at 2026-10-17T11:46:56+05:30
+kill #2 sent at 2026-10-17T11:46:57+05:30  exit=137
+restart #2 sent at 2026-10-17T11:46:59+05:30
+kill #3 sent at 2026-10-17T11:46:59+05:30  exit=137
+restart #3 sent at 2026-10-17T11:47:01+05:30
+final status after three SIGKILLs: DRIVER_ASSIGNED
+payments:   1   (expect 1)
+history:    1:PENDING -> 2:PAID -> 3:CONFIRMED -> 4:DRIVER_ASSIGNED
+ladder:     2,3   (expect 2,3)
+quarantine: 0   (expect 0)
+
+GRACEFUL STOP: docker compose stop payment-worker (SIGTERM) mid-flight
+HTTP/1.1 202 Accepted
+date: Sat, 17 Oct 2026 06:17:20 GMT
+server: uvicorn
+location: /api/v1/orders/order_58138ff96adb43fca15ce23bd5efc85a
+content-length: 184
+content-type: application/json
+x-request-id: req_m4_37789f8d-639
+vary: Origin
+
+{"order_id":"order_58138ff96adb43fca15ce23bd5efc85a","status":"PENDING","currency":"INR","total_amount_minor":71000,"version":1,"message":"Order accepted for asynchronous processing."}order: order_58138ff96adb43fca15ce23bd5efc85a
+exit code after SIGTERM: 0   (expect 0 = bounded graceful shutdown)
+shutdown log:
+payment-worker-1  | {"ts": "2026-10-17T06:17:22.350+00:00", "level": "INFO", "logger": "quickbite.worker", "service": "payment-worker", "message": "shutdown requested; finishing in-flight message", "consumer": "payment", "result": "stopping"}
+final status after graceful stop + restart: DRIVER_ASSIGNED
+payments for that order: 1   (expect 1)

@@ -11,7 +11,10 @@ from __future__ import annotations
 import copy
 
 import aio_pika
+from sqlalchemy import select
 
+from app.db.models.quarantine_record import QuarantineRecord
+from app.db.session import session_scope
 from app.messaging.topology import declare_topology
 from app.schemas.events import (
     ORDER_CONFIRMED,
@@ -104,11 +107,14 @@ async def test_multi_segment_wildcard_reaches_dotted_event_names(pipeline):
 
 
 async def test_malformed_and_unsupported_envelopes_are_dead_lettered(pipeline):
-    """Malformed/unknown-schema -> dead-letter + ACK (never infinite retry);
-    a well-formed FUTURE event type -> logged + ACK without side effects."""
+    """Malformed/unsupported schema -> DURABLE quarantine record + transactional
+    dead-exchange publication, then ACK (never infinite retry); a well-formed
+    FUTURE event type at the notification worker -> logged + ACK without side
+    effects (assignment §9)."""
     names = pipeline.names
     pipeline.start_consumers("payment")
     pipeline.start_consumers("notification")
+    pipeline.start_dispatcher()  # publishes the quarantine outbox publications
 
     channel = await pipeline.connection.channel()
 
@@ -131,9 +137,13 @@ async def test_malformed_and_unsupported_envelopes_are_dead_lettered(pipeline):
     await pipeline.publish_to_queue(names.notification_queue, future, message_id="future_type_1")
 
     dead = await pipeline.drain_queue(names.dead_queue)
-    reasons = sorted(m.get("reason", "") for m in dead)
-    assert reasons == ["invalid_json", "unsupported_schema_version"]
+    codes = sorted(m.get("failure_code", "") for m in dead)
+    # M4 classification: the CLASS travels in failure_code, the precise
+    # reason (invalid_json / unsupported schema version) in `reason`.
+    assert codes == ["malformed_envelope", "unsupported_schema_version"]
     assert len(dead) == 2  # exactly the two rejected copies
+    reasons = {m.get("failure_code"): m.get("reason", "") for m in dead}
+    assert reasons["malformed_envelope"].startswith("invalid_json")
 
     # Both malformed copies were ACKED (queues drained), and the future type
     # was acknowledged WITHOUT dead-lettering it or writing anything.
@@ -142,3 +152,25 @@ async def test_malformed_and_unsupported_envelopes_are_dead_lettered(pipeline):
 
     rows = await order_rows("order_dead_probe")
     assert rows["processed"] == [] and rows["notifications"] == []
+    # Neither broken copy produced or mutated ANY order row — malformed
+    # quarantine records carry no order reference at all.
+    assert rows["quarantined"] == []
+
+    # Durable quarantine records exist for both broken messages, keyed by the
+    # deterministic raw-bytes digest carried in their dead-lettered copies
+    # (identity is written BEFORE the ack, so they exist by drain time).
+    async with session_scope() as session:
+        records = list(
+            (
+                await session.execute(
+                    select(QuarantineRecord).where(
+                        QuarantineRecord.event_id.in_([m["event_id"] for m in dead])
+                    )
+                )
+            ).scalars()
+        )
+    assert len(records) == 2
+    assert sorted(r.failure_code for r in records) == [
+        "malformed_envelope",
+        "unsupported_schema_version",
+    ]

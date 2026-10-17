@@ -1,0 +1,6 @@
+# M4 failure control: attempts 1-2 transient, attempt 3 succeeds ->
+# durable retries visible, then a normal successful chain.
+services:
+  payment-worker:
+    environment:
+      PAYMENT_MODE: fail_twice

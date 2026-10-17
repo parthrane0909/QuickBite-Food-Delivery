@@ -1,12 +1,14 @@
-# QuickBite Event Contract (v1)
+# QuickBite Event Contract (v1, Milestone 4)
 
-What crosses the broker: envelope, event types, routing, consumer protocol and
-the dead-letter contract. Source of truth for type names:
-`backend/app/schemas/events.py`; for bindings: `backend/app/messaging/topology.py`.
+What crosses the broker: envelope, event types, routing, consumer protocol,
+the targeted-retry contract and the quarantine/dead-letter contract. Source of
+truth for type names: `backend/app/schemas/events.py`; for bindings:
+`backend/app/messaging/topology.py`.
 
 ## Envelope
 
-Every AMQP message body is JSON with `AMQP message_id = event_id`:
+Every AMQP message body is JSON with `AMQP message_id = event_id` (set by our
+publisher):
 
 ```json
 {
@@ -24,13 +26,18 @@ Every AMQP message body is JSON with `AMQP message_id = event_id`:
 
 | Field | Rule |
 | --- | --- |
-| `event_id` | Immutable idempotency key, `evt_<kind>_<hex>`; **retained across every publish attempt and redelivery** |
-| `schema_version` | Integer; `1` today. Consumers reject versions they don't know (→ dead letter), never crash |
+| `event_id` | Immutable idempotency key, `evt_<kind>_<hex>`; **retained across every publish attempt, retry and redelivery** — never regenerated |
+| `schema_version` | Integer; `1` today. Consumers reject versions they don't know (→ quarantine), never crash |
 | `event_type` | One of the six types below |
 | `order_version` | The order version the event describes (child events carry the version they produced) |
 | `correlation_id` | Inherited from the originating request (`X-Request-ID`), never regenerated downstream |
 | `causation_id` | The `event_id` that directly caused this event (`null` for `order.created`) |
 | `data` | `{customer_id, restaurant_id}` only — **no addresses, names or money free-text** |
+
+The AMQP `message_id` property is **not** a durable logical identity by
+itself: when a publisher omits it, aiormq/RabbitMQ generates a unique value
+per delivery. Durable identities (quarantine keys, dedup markers) always come
+from the payload, never from the transport property.
 
 ## Event types, producers, consumers
 
@@ -38,7 +45,7 @@ Every AMQP message body is JSON with `AMQP message_id = event_id`:
 | --- | --- | --- |
 | `order.created` | Checkout (in the order transaction, via outbox) | payment, notification |
 | `order.paid` | payment worker (success branch) | restaurant, notification |
-| `order.payment.failed` | payment worker (terminal decline branch) | notification |
+| `order.payment.failed` | payment worker (terminal decline/exhaustion branch) | notification |
 | `order.confirmed` | restaurant worker (accept branch) | delivery, notification |
 | `order.driver.assigned` | delivery worker (success branch) | notification |
 | `order.failed` | restaurant/delivery worker (terminal reject branch) | notification |
@@ -65,6 +72,27 @@ ONE segment and would silently drop `order.payment.failed` and
 the `topology-init` one-shot **before** the dispatcher starts, and re-declared
 defensively by every consumer on (re)connect.
 
+### Targeted retries (Milestone 4)
+
+Retry publications **never** ride `quickbite.orders`. They use the RabbitMQ
+**default exchange** (empty name) with `routing_key` = the failing queue's
+name, written as a scheduled outbox row with
+`exchange='' / routing_key=<queue>`:
+
+| Consumer | Retry routing key |
+| --- | --- |
+| payment | `payment.queue` |
+| restaurant | `restaurant.queue` |
+| delivery | `delivery.queue` |
+| notification | `notification.queue` |
+
+Only the queue that failed ever receives the retry — unrelated subscribers are
+never re-delivered another consumer's failure. One outbox row per
+`(exchange, routing_key, event_id)` is **re-armed** across attempts
+(migration `0002`); the attempt history lives in `retry_jobs`
+(`UNIQUE (consumer_name, event_id, attempt)`), keyed by the immutable
+`event_id`.
+
 ## Publication semantics
 
 - The dispatcher claims rows with `FOR UPDATE SKIP LOCKED` + a lease
@@ -72,14 +100,19 @@ defensively by every consumer on (re)connect.
   and `mandatory` routing**, and marks `SENT` only after confirmed routing.
 - Unroutable or failed publishes keep the row eligible with exponential
   `available_at` backoff (`2^(attempts-1)`, capped 60 s, no attempt cap).
+- Due retry rows are made eligible by the `retry-scheduler` service (DB-only,
+  `SKIP LOCKED`); the dispatcher also honours each row's own `available_at`,
+  so scheduler downtime delays activation but never loses a retry.
 - Consequence: **at-least-once**. A crash between "broker confirmed" and
   "row marked SENT" republishes the same `event_id` — consumers deduplicate.
 
 ## Consumer protocol (all four workers)
 
 1. Parse envelope: malformed JSON / unknown `schema_version` / wrong shape →
-   dead-letter + ack. A well-formed event with an **unknown future
-   `event_type`** is logged + acked (never retried, never parked).
+   **quarantine + ack** (durable record, no retries). A well-formed event with
+   an unknown future `event_type`: business consumers quarantine + ack; the
+   notification worker logs + acks (§9). A well-formed type no consumer serves
+   yet → log + ack.
 2. Stage delay (demo latency control: payment/restaurant/delivery 1 s,
    notification 0 s by default).
 3. **One transaction**: lock the order row (`FOR UPDATE`) → check
@@ -88,37 +121,60 @@ defensively by every consumer on (re)connect.
    outbox event) and insert the dedup marker in the same transaction.
 4. Commit, **then** ack. Crash between commit and ack → redelivery → dedup
    no-op → ack (no repeated effects).
+5. **Transient failure** (business rule not yet satisfiable, order missing,
+   DB error): business tx rolls back → one new transaction writes the next
+   `retry_jobs` attempt (due 2 s / 10 s / 30 s by default) plus its scheduled
+   targeted publication → commit → ack. On exhaustion
+   (`attempt = RETRY_MAX_ATTEMPTS = 4`): state-guarded terminal transition for
+   payment/restaurant/delivery, quarantine-only for notifications, always with
+   a quarantine record. Permanent declines/rejects bypass the ladder entirely.
 
 Stale events (order already at/beyond the described state) are recorded as
-`STALE_NOOP` markers instead of forcing backward transitions; an event
-describing a state the order hasn't reached yet gets a bounded deferred retry
-(1 s, 2 s, 4 s) and then dead-letters (durable delayed retries arrive with M4).
+`STALE_NOOP` markers instead of forcing backward transitions.
 
-## Dead-letter contract
+## Quarantine / dead-letter contract
 
-Everything parked lands on `orders.dead-letter.queue` via `quickbite.dead`
-routing key `failed`, with a body:
+Every terminally failed delivery produces BOTH, in one transaction, committed
+**before** the ack:
+
+1. one `quarantine_records` row — `UNIQUE (consumer_name, event_id)` so a
+   duplicate delivery can never create a second logical record (it acks);
+2. one transactional outbox publication to direct exchange `quickbite.dead`,
+   routing key `failed` → `orders.dead-letter.queue`, published with the same
+   confirms + mandatory discipline as every other outbox row (RabbitMQ's
+   dead-letter behaviour alone is never the only copy).
+
+**Logical identity** (what `quarantine_records.event_id` holds):
+
+| Input | Identity |
+| --- | --- |
+| Parseable envelope (exhaustion, permanent, stale/missing order, unknown type) | payload `event_id` |
+| Parseable JSON without an `event_id` (unknown type) | digest `undecoded_<sha256(canonical json)[:32]>` |
+| Malformed bytes (bad JSON, unsupported `schema_version`) | digest `undecoded_<sha256(raw bytes)[:32]>` — never the transport `message_id` |
+
+The dead-lettered body is self-describing:
 
 ```json
-{"event_id": "...", "reason": "precondition_not_met", "detail": "...",
- "consumer": "restaurant", "body": "...original envelope..."}
+{"event_id": "...", "failure_code": "malformed_envelope",
+ "reason": "invalid_json: ...", "consumer": "payment",
+ "body": "...original bytes..."}
 ```
 
-| `reason` | When |
+| `failure_code` (classification) | When |
 | --- | --- |
-| `invalid_json`, `unsupported_schema_version`, `invalid_envelope` | Unprocessable envelope (ack + park; never a tight requeue loop) |
-| `missing_order` | Envelope references an order that no longer exists (e.g. after a schema reset) |
-| `precondition_not_met` | Order state never caught up within the in-process defer budget |
+| `malformed_envelope` / `unsupported_schema` | Unprocessable envelope — quarantined immediately, no retries, acked |
+| `transient` exhausted → e.g. `PAYMENT_RETRIES_EXHAUSTED` | Ladder ran out; terminal transition (state-guarded) already applied where applicable |
+| Notification ladder exhausted (`NOTIFICATION_RETRIES_EXHAUSTED`) | Order state never touched (§10) |
+| `missing_order` after the ladder | Envelope references an order that no longer exists |
 
-Parking itself is retried at most 3× (2 s apart); if the broker makes parking
-impossible the copy is requeued for a later attempt — **failed work is never
-acked away**. Durable `quarantine_records` persistence and retry scheduling
-are Milestone 4 (the table exists in the schema from M1).
+Malformed quarantine records carry **no order reference at all**, so a broken
+payload can never mutate an unrelated order.
 
 ## Evolution rules
 
 - Adding a field: allowed, consumers ignore unknowns.
-- Adding an event type: old consumers log + ack it (see protocol step 1).
+- Adding an event type: old consumers log + ack or quarantine it (see protocol
+  step 1); it never blocks the queue.
 - Renaming/removing a field or changing semantics: bump `schema_version`;
   both versions must be handled during a rolling deploy.
 
@@ -126,4 +182,6 @@ are Milestone 4 (the table exists in the schema from M1).
 
 Integration tests publish/consume under a `tst_`-prefixed copy of the exact
 same topology (`TopologyNames(prefix)`), so a running Compose stack never
-competes with test messages. Production names have no prefix.
+competes with test messages. Production names have no prefix. Retry routing
+keys are stored as final (already-namespaced) queue names and are never
+re-prefixed; topic routing keys are likewise never prefixed.

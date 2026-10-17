@@ -1,0 +1,6 @@
+# M4 failure control: every payment attempt is a TRANSIENT failure -> the
+# full durable ladder (2s/10s/30s) -> PAYMENT_RETRIES_EXHAUSTED + quarantine.
+services:
+  payment-worker:
+    environment:
+      PAYMENT_MODE: always_fail

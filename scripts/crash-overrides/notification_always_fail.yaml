@@ -1,0 +1,6 @@
+# M4 failure control: every notification delivery attempt is transient ->
+# bounded ladder per event -> quarantine ONLY; order status never changes.
+services:
+  notification-worker:
+    environment:
+      NOTIFICATION_MODE: always_fail

@@ -1,0 +1,84 @@
+$ docker compose stop outbox-dispatcher retry-scheduler payment-worker restaurant-worker delivery-worker notification-worker   # pipeline stopped around schema changes
+ Container quickbite-outbox-dispatcher-1 Stopping 
+ Container quickbite-retry-scheduler-1 Stopping 
+ Container quickbite-payment-worker-1 Stopping 
+ Container quickbite-delivery-worker-1 Stopping 
+ Container quickbite-notification-worker-1 Stopping 
+ Container quickbite-restaurant-worker-1 Stopping 
+ Container quickbite-retry-scheduler-1 Stopped 
+ Container quickbite-notification-worker-1 Stopped 
+ Container quickbite-restaurant-worker-1 Stopped 
+ Container quickbite-delivery-worker-1 Stopped 
+ Container quickbite-outbox-dispatcher-1 Stopped 
+ Container quickbite-payment-worker-1 Stopped 
+
+$ docker compose run --rm api sh -c "alembic downgrade base && alembic upgrade head"
+INFO  [alembic.runtime.migration] Running downgrade 0002 -> 0001, publication identity: unique (exchange, routing_key, event_id)
+INFO  [alembic.runtime.migration] Running downgrade 0001 -> , initial schema
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001, initial schema
+INFO  [alembic.runtime.migration] Running upgrade 0001 -> 0002, publication identity: unique (exchange, routing_key, event_id)
+
+$ docker compose run --rm api sh -c "alembic heads && alembic current"   # single head
+0002 (head)
+0002 (head)
+
+$ docker compose run --rm seed
+{"ts": "2026-10-17T06:12:09.699+00:00", "level": "INFO", "logger": "quickbite.seed", "service": "seed", "message": "seed complete", "result": "{'users_created': 4, 'users_updated': 0, 'restaurants': 4, 'menu_items': 24}"}
+
+$ docker compose start outbox-dispatcher retry-scheduler payment-worker restaurant-worker delivery-worker notification-worker
+ Container quickbite-rabbitmq-1 Waiting 
+ Container quickbite-postgres-1 Waiting 
+ Container quickbite-rabbitmq-1 Healthy 
+ Container quickbite-postgres-1 Healthy 
+ Container quickbite-migrate-1 Starting 
+ Container quickbite-topology-init-1 Starting 
+ Container quickbite-migrate-1 Started 
+ Container quickbite-migrate-1 Waiting 
+ Container quickbite-postgres-1 Waiting 
+ Container quickbite-topology-init-1 Started 
+ Container quickbite-postgres-1 Waiting 
+ Container quickbite-rabbitmq-1 Waiting 
+ Container quickbite-topology-init-1 Waiting 
+ Container quickbite-migrate-1 Waiting 
+ Container quickbite-postgres-1 Waiting 
+ Container quickbite-rabbitmq-1 Waiting 
+ Container quickbite-postgres-1 Waiting 
+ Container quickbite-rabbitmq-1 Waiting 
+ Container quickbite-topology-init-1 Waiting 
+ Container quickbite-topology-init-1 Waiting 
+ Container quickbite-rabbitmq-1 Waiting 
+ Container quickbite-postgres-1 Waiting 
+ Container quickbite-topology-init-1 Waiting 
+ Container quickbite-rabbitmq-1 Waiting 
+ Container quickbite-topology-init-1 Waiting 
+ Container quickbite-postgres-1 Waiting 
+ Container quickbite-postgres-1 Healthy 
+ Container quickbite-postgres-1 Healthy 
+ Container quickbite-postgres-1 Healthy 
+ Container quickbite-rabbitmq-1 Healthy 
+ Container quickbite-rabbitmq-1 Healthy 
+ Container quickbite-rabbitmq-1 Healthy 
+ Container quickbite-rabbitmq-1 Healthy 
+ Container quickbite-postgres-1 Healthy 
+ Container quickbite-postgres-1 Healthy 
+ Container quickbite-rabbitmq-1 Healthy 
+ Container quickbite-postgres-1 Healthy 
+ Container quickbite-migrate-1 Exited 
+ Container quickbite-retry-scheduler-1 Starting 
+ Container quickbite-topology-init-1 Exited 
+ Container quickbite-notification-worker-1 Starting 
+ Container quickbite-topology-init-1 Exited 
+ Container quickbite-topology-init-1 Exited 
+ Container quickbite-delivery-worker-1 Starting 
+ Container quickbite-migrate-1 Exited 
+ Container quickbite-restaurant-worker-1 Starting 
+ Container quickbite-topology-init-1 Exited 
+ Container quickbite-payment-worker-1 Starting 
+ Container quickbite-topology-init-1 Exited 
+ Container quickbite-outbox-dispatcher-1 Starting 
+ Container quickbite-retry-scheduler-1 Started 
+ Container quickbite-notification-worker-1 Started 
+ Container quickbite-delivery-worker-1 Started 
+ Container quickbite-restaurant-worker-1 Started 
+ Container quickbite-payment-worker-1 Started 
+ Container quickbite-outbox-dispatcher-1 Started 

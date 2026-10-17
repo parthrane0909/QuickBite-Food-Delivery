@@ -1,0 +1,7 @@
+# M4 crash demo: outbox dispatcher dies (exit 73) AFTER a confirmed publish
+# but BEFORE marking the row SENT — the republish-on-recovery window.
+services:
+  outbox-dispatcher:
+    restart: "no"
+    environment:
+      DISPATCHER_CRASH_AFTER_PUBLISH: "true"

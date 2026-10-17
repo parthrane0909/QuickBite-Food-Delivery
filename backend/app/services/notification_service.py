@@ -5,6 +5,11 @@ Binds `order.#` (multi-segment: also receives `order.payment.failed` and
 (§10) — effects are the `notifications` row (UNIQUE (customer_id, event_id),
 belt-and-braces with the runtime's processed-event marker) and the message is
 rendered from current PostgreSQL state (no PII in events).
+
+NOTIFICATION_MODE=always_fail (Milestone 4): a deterministic transient
+failure on every attempt — rolled back, durably retried with the bounded
+delay schedule, and on exhaustion QUARANTINED with the order's business
+status deliberately unchanged (assignment §11).
 """
 
 from __future__ import annotations
@@ -14,6 +19,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.db.models.driver_assignment import DriverAssignment
 from app.db.models.notification import Notification
 from app.db.models.order import Order
@@ -27,7 +33,7 @@ from app.schemas.events import (
     ORDER_PAYMENT_FAILED,
     EventEnvelope,
 )
-from app.services.processing import ProcessOutcome
+from app.services.processing import ProcessOutcome, TransientProcessingError
 
 _EVENT_TITLES = {
     ORDER_CREATED: "Order received",
@@ -75,8 +81,17 @@ async def render_message(session: AsyncSession, order: Order, event_type: str) -
 
 
 async def process_notification(
-    session: AsyncSession, envelope: EventEnvelope, order: Order
+    session: AsyncSession, envelope: EventEnvelope, order: Order, attempt: int
 ) -> ProcessOutcome:
+    del attempt  # notification has no attempt-sensitive simulation in Milestone 4
+    if get_settings().notification_mode == "always_fail":
+        # Deterministic transient failure BEFORE any write: the whole
+        # transaction rolls back and the runtime durably retries; on
+        # exhaustion the event is quarantined and the order's business
+        # status is deliberately left untouched.
+        raise TransientProcessingError(
+            "simulated notification delivery error (NOTIFICATION_MODE=always_fail)"
+        )
     session.add(
         Notification(
             id=f"notif_{uuid.uuid4().hex}",

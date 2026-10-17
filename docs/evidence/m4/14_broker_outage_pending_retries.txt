@@ -1,0 +1,66 @@
+BROKER OUTAGE during the retry window (PAYMENT_MODE=always_fail)
+HTTP/1.1 202 Accepted
+date: Sat, 17 Oct 2026 06:17:42 GMT
+server: uvicorn
+location: /api/v1/orders/order_826195493c4f466b8b582d7492cf12df
+content-length: 184
+content-type: application/json
+x-request-id: req_m4_17d8c39f-b2c
+vary: Origin
+
+{"order_id":"order_826195493c4f466b8b582d7492cf12df","status":"PENDING","currency":"INR","total_amount_minor":71000,"version":1,"message":"Order accepted for asynchronous processing."}order: order_826195493c4f466b8b582d7492cf12df
+
+1) wait until attempt 1 failed and its durable retry was scheduled
+retry job exists; stopping the broker DURING the retry window
+
+2) readiness during the outage (PostgreSQL gates; RabbitMQ reported)
+{"status":"degraded","checks":{"postgres":"up","rabbitmq":"down"},"request_id":"52776647235a4eaca533a981350526d8","time":"2026-10-17T06:17:47.432378+00:00"}
+HTTP 200
+waiting 8s (past the due time of the pending retry) with the broker DOWN...
+
+3) state during the outage — due work waits, never vanishes:
+2 | state=PUBLISHED | due=2026-10-17 06:17:47.389758+00 | now=2026-10-17 06:17:55.542154+00
+targeted outbox publication:
+PENDING | attempts=4 | available_at=2026-10-17 06:18:03.093825+00 | last_error=connection_lost: [Errno -3] Temporary failure in name resolution
+dispatcher log (bounded publish backoff, row remains eligible):
+outbox-dispatcher-1  | {"ts": "2026-10-17T06:17:55.092+00:00", "level": "ERROR", "logger": "aiormq.connection", "service": "outbox-dispatcher", "message": "error when creating transport: <AMQPConnectionError: (-3, 'Temporary failure in name resolution')>"}
+outbox-dispatcher-1  | {"ts": "2026-10-17T06:17:55.096+00:00", "level": "WARNING", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "outbox publish failed; row remains eligible", "order_id": "order_826195493c4f466b8b582d7492cf12df", "event_id": "evt_created_19ef0a1c19044158bb320fff68e9fae2", "attempts": 4, "result": "publish_failed:connection_lost", "detail": "[Errno -3] Temporary failure in name resolution"}
+outbox-dispatcher-1  | {"ts": "2026-10-17T06:17:55.096+00:00", "level": "INFO", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "dispatcher cycle complete"}
+outbox-dispatcher-1  | {"ts": "2026-10-17T06:17:55.098+00:00", "level": "INFO", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "outbox backlog", "result": "backlog", "pending_outbox_age_s": 9.71}
+outbox-dispatcher-1  | {"ts": "2026-10-17T06:17:55.100+00:00", "level": "INFO", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "outbox backlog", "result": "backlog", "pending_outbox_age_s": 9.71}
+outbox-dispatcher-1  | {"ts": "2026-10-17T06:17:55.602+00:00", "level": "INFO", "logger": "quickbite.outbox", "service": "outbox-dispatcher", "message": "outbox backlog", "result": "backlog", "pending_outbox_age_s": 10.21}
+scheduler log (DB-only: keeps operating through broker downtime):
+retry-scheduler-1  | {"ts": "2026-10-17T06:17:54.155+00:00", "level": "INFO", "logger": "quickbite.retry_scheduler", "service": "retry-scheduler", "message": "retry scheduler cycle complete", "result": "scheduler_cycle", "activated": 0, "retry_pending": 0, "retry_published": 18, "retry_exhausted": 6, "quarantine_count": 6, "oldest_due_age_seconds": 0.0}
+retry-scheduler-1  | {"ts": "2026-10-17T06:17:54.659+00:00", "level": "INFO", "logger": "quickbite.retry_scheduler", "service": "retry-scheduler", "message": "retry scheduler cycle complete", "result": "scheduler_cycle", "activated": 0, "retry_pending": 0, "retry_published": 18, "retry_exhausted": 6, "quarantine_count": 6, "oldest_due_age_seconds": 0.0}
+retry-scheduler-1  | {"ts": "2026-10-17T06:17:55.168+00:00", "level": "INFO", "logger": "quickbite.retry_scheduler", "service": "retry-scheduler", "message": "retry scheduler cycle complete", "result": "scheduler_cycle", "activated": 0, "retry_pending": 0, "retry_published": 18, "retry_exhausted": 6, "quarantine_count": 6, "oldest_due_age_seconds": 0.0}
+retry-scheduler-1  | {"ts": "2026-10-17T06:17:55.671+00:00", "level": "INFO", "logger": "quickbite.retry_scheduler", "service": "retry-scheduler", "message": "retry scheduler cycle complete", "result": "scheduler_cycle", "activated": 0, "retry_pending": 0, "retry_published": 18, "retry_exhausted": 6, "quarantine_count": 6, "oldest_due_age_seconds": 0.0}
+
+4) restart the broker; the ladder resumes from where it stopped
+rabbitmq health: healthy
+final status: PAYMENT_FAILED
+
+5) AFTER recovery — schedule preserved, exhaustion + quarantine reached:
+2 | state=PUBLISHED | scheduled_after=00:00:02.000203
+3 | state=PUBLISHED | scheduled_after=00:00:10.000258
+4 | state=EXHAUSTED | scheduled_after=00:00:30.000195
+order:      PAYMENT_FAILED / PAYMENT_RETRIES_EXHAUSTED
+quarantine: 1   (expect 1)
+payments:   1   (expect 1 FAILED record)
+outbox after recovery:
+order.created | quickbite.orders/order.created | SENT | attempts=1
+order.payment.failed | quickbite.orders/order.payment.failed | SENT | attempts=1
+order.created | quickbite.dead/failed | SENT | attempts=1
+order.created | <default>/payment.queue | SENT | attempts=1
+worker reconnect + retry logs:
+payment-worker-1  | {"ts": "2026-10-17T06:17:46.172+00:00", "level": "WARNING", "logger": "quickbite.worker", "service": "payment-worker", "message": "connection/consume failure; reconnecting with bounded backoff", "consumer": "payment", "result": "reconnect:StreamEndedError", "retry_in_s": 1.0}
+payment-worker-1  | {"ts": "2026-10-17T06:17:47.177+00:00", "level": "ERROR", "logger": "aiormq.connection", "service": "payment-worker", "message": "error when creating transport: <AMQPConnectionError: (111, \"Connect call failed ('172.20.0.3', 5672)\")>"}
+payment-worker-1  | {"ts": "2026-10-17T06:17:47.177+00:00", "level": "WARNING", "logger": "quickbite.worker", "service": "payment-worker", "message": "connection/consume failure; reconnecting with bounded backoff", "consumer": "payment", "result": "reconnect:AMQPConnectionError", "retry_in_s": 2.0}
+payment-worker-1  | {"ts": "2026-10-17T06:17:49.185+00:00", "level": "ERROR", "logger": "aiormq.connection", "service": "payment-worker", "message": "error when creating transport: <AMQPConnectionError: (-3, 'Temporary failure in name resolution')>"}
+payment-worker-1  | {"ts": "2026-10-17T06:17:49.185+00:00", "level": "WARNING", "logger": "quickbite.worker", "service": "payment-worker", "message": "connection/consume failure; reconnecting with bounded backoff", "consumer": "payment", "result": "reconnect:AMQPConnectionError", "retry_in_s": 5.0}
+payment-worker-1  | {"ts": "2026-10-17T06:17:54.196+00:00", "level": "ERROR", "logger": "aiormq.connection", "service": "payment-worker", "message": "error when creating transport: <AMQPConnectionError: (-3, 'Temporary failure in name resolution')>"}
+payment-worker-1  | {"ts": "2026-10-17T06:17:54.197+00:00", "level": "WARNING", "logger": "quickbite.worker", "service": "payment-worker", "message": "connection/consume failure; reconnecting with bounded backoff", "consumer": "payment", "result": "reconnect:AMQPConnectionError", "retry_in_s": 10.0}
+payment-worker-1  | {"ts": "2026-10-17T06:18:04.408+00:00", "level": "INFO", "logger": "quickbite.topology", "service": "payment-worker", "message": "topology declared", "result": "declared", "exchange": "quickbite.orders"}
+payment-worker-1  | {"ts": "2026-10-17T06:18:04.408+00:00", "level": "INFO", "logger": "quickbite.worker", "service": "payment-worker", "message": "worker connected; consuming", "consumer": "payment", "result": "consuming"}
+payment-worker-1  | {"ts": "2026-10-17T06:18:05.432+00:00", "level": "WARNING", "logger": "quickbite.worker", "service": "payment-worker", "message": "transient failure; durable retry scheduled", "correlation_id": "req_m4_17d8c39f-b2c", "order_id": "order_826195493c4f466b8b582d7492cf12df", "event_id": "evt_created_19ef0a1c19044158bb320fff68e9fae2", "consumer": "payment", "attempt": 2, "next_attempt": 3, "result": "retry_scheduled", "retry_in_s": 10.0, "classification": "transient_processing_error", "target_queue": "payment.queue"}
+payment-worker-1  | {"ts": "2026-10-17T06:18:16.982+00:00", "level": "WARNING", "logger": "quickbite.worker", "service": "payment-worker", "message": "transient failure; durable retry scheduled", "correlation_id": "req_m4_17d8c39f-b2c", "order_id": "order_826195493c4f466b8b582d7492cf12df", "event_id": "evt_created_19ef0a1c19044158bb320fff68e9fae2", "consumer": "payment", "attempt": 3, "next_attempt": 4, "result": "retry_scheduled", "retry_in_s": 30.0, "classification": "transient_processing_error", "target_queue": "payment.queue"}
+payment-worker-1  | {"ts": "2026-10-17T06:18:48.545+00:00", "level": "CRITICAL", "logger": "quickbite.worker", "service": "payment-worker", "message": "retry attempts exhausted; event quarantined", "correlation_id": "req_m4_17d8c39f-b2c", "order_id": "order_826195493c4f466b8b582d7492cf12df", "event_id": "evt_created_19ef0a1c19044158bb320fff68e9fae2", "consumer": "payment", "attempt": 4, "result": "retries_exhausted", "classification": "transient_processing_error", "quarantine": "recorded"}

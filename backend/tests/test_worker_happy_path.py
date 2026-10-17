@@ -261,11 +261,12 @@ async def test_history_and_version_progression(pipeline, async_client, customer_
 async def test_payment_failure_is_terminal_with_no_retry_storm(
     pipeline, async_client, customer_token, monkeypatch
 ):
-    """PAYMENT_MODE=always_fail -> exactly one FAILED payment, terminal
-    PAYMENT_FAILED status, `order.payment.failed` persisted as a notification,
-    and NO retry machinery churns afterwards."""
+    """PAYMENT_MODE=always_decline (PERMANENT business decline) -> exactly one
+    FAILED payment, terminal PAYMENT_FAILED status, `order.payment.failed`
+    persisted as a notification, and NO retry machinery churns afterwards —
+    permanent declines bypass the bounded retry budget by design (§11)."""
     settings = get_settings()
-    monkeypatch.setattr(settings, "payment_mode", "always_fail")
+    monkeypatch.setattr(settings, "payment_mode", "always_decline")
 
     pipeline.start_dispatcher()
     pipeline.start_consumers("payment")

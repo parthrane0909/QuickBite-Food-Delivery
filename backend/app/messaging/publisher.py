@@ -100,6 +100,12 @@ class Publisher:
 
     async def _exchange(self, name: str) -> aio_pika.abc.AbstractExchange:
         channel = await self._ensure_channel()
+        if name == "":
+            # RabbitMQ's pre-declared default exchange (empty name): every
+            # queue is auto-bound by its own name. It must NEVER be declared
+            # or bound (the broker rejects both) — used by Milestone 4
+            # targeted retries (routing key = the failing queue's name).
+            return channel.default_exchange
         # aio-pika's Exchange has NO `is_closed` attribute (verified on
         # 10.1.1); the cache is dropped whenever the channel is replaced or
         # invalidated, so a cached exchange always belongs to the live channel.

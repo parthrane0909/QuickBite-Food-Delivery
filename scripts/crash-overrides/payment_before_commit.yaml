@@ -1,0 +1,8 @@
+# M4 crash demo: worker dies (exit 71) INSIDE the business transaction,
+# BEFORE commit. Nothing persisted; the unacked copy is redelivered when the
+# worker is recreated in base config.
+services:
+  payment-worker:
+    restart: "no"
+    environment:
+      CRASH_POINT: before_commit

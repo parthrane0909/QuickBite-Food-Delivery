@@ -1,0 +1,31 @@
+$ rabbitmqctl list_exchanges -q name type | grep quickbite   # production names only
+quickbite.dead	direct
+quickbite.orders	topic
+
+$ rabbitmqctl list_bindings -q source_name destination_name routing_key | grep ^quickbite
+quickbite.orders	restaurant.queue	order.paid
+quickbite.orders	payment.queue	order.created
+quickbite.dead	orders.dead-letter.queue	failed
+quickbite.orders	notification.queue	order.#
+quickbite.orders	delivery.queue	order.confirmed
+
+# dead-letter path: quarantine publications route quickbite.dead/failed -> orders.dead-letter.queue
+	orders.dead-letter.queue	orders.dead-letter.queue
+	tst_orders.dead-letter.queue	tst_orders.dead-letter.queue
+quickbite.dead	orders.dead-letter.queue	failed
+tst_quickbite.dead	tst_orders.dead-letter.queue	failed
+
+$ rabbitmqctl list_queues -q name messages consumers | <production queues only>
+orders.dead-letter.queue	0	0
+notification.queue	0	1
+restaurant.queue	0	1
+payment.queue	0	1
+delivery.queue	0	1
+
+$ rabbitmqctl list_consumers -q queue_name consumer_tag channel_pid prefetch_count ack_required active | <production queues>
+notification.queue	<rabbit@2daece623ef4.1792175572.39004.0>	ctag1.d7a593a5f5b746d685d5fdf8d3115e17	true	8	true
+restaurant.queue	<rabbit@2daece623ef4.1792175572.39025.0>	ctag1.5eb6cb2001204324ab2fad763c901206	true	8	true
+payment.queue	<rabbit@2daece623ef4.1792175572.39046.0>	ctag1.78909924ef9a4444887b5de5384c2d3f	true	8	true
+delivery.queue	<rabbit@2daece623ef4.1792175572.38983.0>	ctag1.2c8bae6ad48746acb4ddef897143f578	true	8	true
+
+# RabbitMQ management UI (kept in M4): http://127.0.0.1:15672

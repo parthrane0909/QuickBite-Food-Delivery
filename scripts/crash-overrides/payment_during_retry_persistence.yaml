@@ -1,0 +1,9 @@
+# M4 crash demo: worker dies (exit 72) INSIDE the retry-persistence
+# transaction, before its commit. The message stays unacked (never acked on
+# a failed persist); the ladder restarts from a redelivery after recovery.
+services:
+  payment-worker:
+    restart: "no"
+    environment:
+      CRASH_POINT: during_retry_persistence
+      PAYMENT_MODE: always_fail

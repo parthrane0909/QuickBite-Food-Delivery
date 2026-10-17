@@ -1,0 +1,26 @@
+$ docker compose ps -a   # retry-scheduler added in M4
+NAME                              IMAGE                       COMMAND                  SERVICE               CREATED              STATUS                          PORTS
+quickbite-api-1                   quickbite-backend:local     "uvicorn app.main:ap…"   api                   About a minute ago   Up About a minute (healthy)     127.0.0.1:8000->8000/tcp
+quickbite-delivery-worker-1       quickbite-backend:local     "python -m workers.d…"   delivery-worker       About a minute ago   Up 3 seconds                    8000/tcp
+quickbite-migrate-1               quickbite-backend:local     "alembic upgrade head"   migrate               4 minutes ago        Exited (0) 4 seconds ago        
+quickbite-notification-worker-1   quickbite-backend:local     "python -m workers.n…"   notification-worker   About a minute ago   Up 3 seconds                    8000/tcp
+quickbite-outbox-dispatcher-1     quickbite-backend:local     "python -m app.messa…"   outbox-dispatcher     About a minute ago   Up 3 seconds                    8000/tcp
+quickbite-payment-worker-1        quickbite-backend:local     "python -m workers.p…"   payment-worker        About a minute ago   Up 3 seconds                    8000/tcp
+quickbite-postgres-1              postgres:17.11              "docker-entrypoint.s…"   postgres              12 hours ago         Up 12 hours (healthy)           127.0.0.1:5433->5432/tcp
+quickbite-rabbitmq-1              rabbitmq:4.3.6-management   "docker-entrypoint.s…"   rabbitmq              12 hours ago         Up 12 hours (healthy)           4369/tcp, 5671/tcp, 127.0.0.1:5672->5672/tcp, 15671/tcp, 15691-15692/tcp, 25672/tcp, 127.0.0.1:15672->15672/tcp
+quickbite-restaurant-worker-1     quickbite-backend:local     "python -m workers.r…"   restaurant-worker     About a minute ago   Up 3 seconds                    8000/tcp
+quickbite-retry-scheduler-1       quickbite-backend:local     "python -m app.messa…"   retry-scheduler       About a minute ago   Up 3 seconds                    8000/tcp
+quickbite-seed-1                  quickbite-backend:local     "python -m scripts.s…"   seed                  About a minute ago   Exited (0) About a minute ago   
+quickbite-topology-init-1         quickbite-backend:local     "python -m scripts.i…"   topology-init         About a minute ago   Exited (0) 4 seconds ago        
+
+$ curl /health/live
+{"status":"alive","service":"api","time":"2026-10-17T06:12:15.541789+00:00"}
+HTTP 200
+$ curl /health/ready
+{"status":"ready","checks":{"postgres":"up","rabbitmq":"up"},"request_id":"5379e54d5bed4c2fbcb973f8ceeb270a","time":"2026-10-17T06:12:15.550851+00:00"}
+HTTP 200
+
+$ docker compose logs --tail 10 retry-scheduler
+retry-scheduler-1  | {"ts": "2026-10-17T06:10:44.726+00:00", "level": "INFO", "logger": "quickbite.retry_scheduler", "service": "retry-scheduler", "message": "retry scheduler starting", "consumer": "retry-scheduler"}
+retry-scheduler-1  | {"ts": "2026-10-17T06:11:59.265+00:00", "level": "INFO", "logger": "quickbite.retry_scheduler", "service": "retry-scheduler", "message": "retry scheduler stopped", "consumer": "retry-scheduler"}
+retry-scheduler-1  | {"ts": "2026-10-17T06:12:12.621+00:00", "level": "INFO", "logger": "quickbite.retry_scheduler", "service": "retry-scheduler", "message": "retry scheduler starting", "consumer": "retry-scheduler"}

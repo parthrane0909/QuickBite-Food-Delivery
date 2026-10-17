@@ -31,6 +31,13 @@ DEAD_EXCHANGE = "quickbite.dead"
 DEAD_QUEUE = "orders.dead-letter.queue"
 DEAD_ROUTING_KEY = "failed"
 
+# RabbitMQ's pre-declared default exchange (empty name, direct): every queue is
+# automatically bound to it with routing key == queue name. Milestone 4
+# targeted retries publish HERE with routing_key equal to the FAILING queue's
+# name — only the original consumer ever receives the retry (assignment §11).
+# The default exchange must never be declared or bound (RabbitMQ rejects both).
+DEFAULT_EXCHANGE = ""
+
 # Main consumer queues (durable, non-exclusive, never auto-delete).
 PAYMENT_QUEUE = "payment.queue"
 RESTAURANT_QUEUE = "restaurant.queue"

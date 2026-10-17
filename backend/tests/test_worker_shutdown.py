@@ -161,7 +161,7 @@ async def test_commit_without_ack_redelivery_produces_no_repeated_effects(
     envelope = parse_envelope(message.body)
     assert envelope.event_id == created["event_id"]
 
-    outcome = await _run_transaction("payment", envelope, process_payment)
+    outcome = await _run_transaction("payment", envelope, process_payment, 1)
     assert outcome.result == "applied"
 
     # Crash: no ACK. Closing the channel makes the broker requeue the copy.

@@ -5,13 +5,29 @@ States: PENDING (eligible), CLAIMED (leased by a dispatcher), SENT (confirmed
 publish AND no mandatory return). Publication failures leave rows PENDING and
 re-eligible; a crash after publish but before SENT may duplicate the message,
 which is why consumers must be idempotent (at-least-once by design).
+
+Publication identity (migration 0002) is UNIQUE(exchange, routing_key,
+event_id): the domain event's immutable `event_id` is reused by MILESTONE 4
+targeted retries (default exchange + the failing queue's name as routing key),
+and two consumers may retry the same event independently. One row per
+publication identity is re-armed across attempts; per-attempt counters live in
+`retry_jobs`.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, Index, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    DateTime,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -24,15 +40,19 @@ def _utcnow() -> datetime:
 class OutboxEvent(Base):
     __tablename__ = "outbox_events"
     __table_args__ = (
+        # Full publication identity (master prompt §7C/§13): the same
+        # event_id may be published to different targets (topic event once,
+        # targeted retry copies afterwards) but never stored twice per target.
+        UniqueConstraint("exchange", "routing_key", "event_id"),
         CheckConstraint("state IN ('PENDING','CLAIMED','SENT')", name="state"),
         CheckConstraint("attempts >= 0", name="attempts_non_negative"),
         Index("ix_outbox_claim", "state", "available_at"),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    # Immutable publication identity — equal to the AMQP message_id; unique so
-    # the same domain event is never stored twice.
-    event_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    # Immutable domain-event identity — equal to the AMQP message_id of every
+    # publication of this event (original and retry copies alike).
+    event_id: Mapped[str] = mapped_column(String(64), nullable=False)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     exchange: Mapped[str] = mapped_column(String(64), nullable=False)

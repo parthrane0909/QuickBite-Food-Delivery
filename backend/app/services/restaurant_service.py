@@ -3,7 +3,9 @@
 Deterministic simulation via RESTAURANT_MODE (always_succeed,
 always_fail = unrecoverable restaurant rejection -> FAILED + order.failed,
 crash_after_checkpoint = success path with a commit-before-ack crash).
-`fail_twice` is rejected at startup until Milestone 4.
+The generic bounded-retry/quarantine path (shared runtime) still protects
+this worker against transient infrastructure failures; a business REJECTION
+is permanent by definition and bypasses retries (assignment §11).
 """
 
 from __future__ import annotations
@@ -30,14 +32,15 @@ def simulate_restaurant(mode: str) -> str:
     if mode == "always_fail":
         return "reject"
     raise RuntimeError(
-        f"RESTAURANT_MODE={mode!r} is not supported before Milestone 4; "
+        f"RESTAURANT_MODE={mode!r} is not supported; "
         "use always_succeed, always_fail or crash_after_checkpoint"
     )
 
 
 async def process_restaurant(
-    session: AsyncSession, envelope: EventEnvelope, order: Order
+    session: AsyncSession, envelope: EventEnvelope, order: Order, attempt: int
 ) -> ProcessOutcome:
+    del attempt  # restaurant has no attempt-sensitive simulation in Milestone 4
     if order.status == sm.PENDING:
         # order.paid arriving before payment settled: unexpected disorder.
         raise PreconditionNotMetError(

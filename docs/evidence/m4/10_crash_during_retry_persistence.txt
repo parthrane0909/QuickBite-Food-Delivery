@@ -1,0 +1,29 @@
+CRASH_POINT=during_retry_persistence + PAYMENT_MODE=always_fail via
+scripts/crash-overrides/payment_during_retry_persistence.yaml (restart: no)
+HTTP/1.1 202 Accepted
+date: Sat, 17 Oct 2026 06:15:04 GMT
+server: uvicorn
+location: /api/v1/orders/order_69e646d922574b64bf3684d09209048f
+content-length: 184
+content-type: application/json
+x-request-id: req_m4_47f8b9b1-d51
+vary: Origin
+
+{"order_id":"order_69e646d922574b64bf3684d09209048f","status":"PENDING","currency":"INR","total_amount_minor":71000,"version":1,"message":"Order accepted for asynchronous processing."}order: order_69e646d922574b64bf3684d09209048f
+payment-worker exit code: 72   (expect 72 = died INSIDE the retry-persistence tx)
+
+BEFORE recovery — the persist transaction rolled back, the message was NEVER acked:
+retry_jobs: 0   (expect 0: rolled back with the crash)
+order:      PENDING / v1   (expect PENDING)
+outbox:     order.created:SENT
+payment.queue depth (redelivery waiting): 1
+
+RECOVERY: recreate with PAYMENT_MODE=always_fail only (crash point cleared)
+final status: PAYMENT_FAILED
+ladder restarted from the redelivery and ran to completion:
+2 | state=PUBLISHED | scheduled_after=00:00:02.000199
+3 | state=PUBLISHED | scheduled_after=00:00:10.000212
+4 | state=EXHAUSTED | scheduled_after=00:00:30.000137
+PASS: single ladder (no duplicates from the redelivery) = 3
+PASS: quarantine recorded once = 1
+order: PAYMENT_FAILED / PAYMENT_RETRIES_EXHAUSTED

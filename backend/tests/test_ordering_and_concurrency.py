@@ -4,8 +4,9 @@
   on duplicate copies must apply each event exactly once — row lock + unique
   marker, no double payments/assignments/transitions.
 - Disordered delivery (event arriving BEFORE its prerequisite state) must
-  never regress or silently lose a transition: bounded deferred retry, then
-  dead-letter, and the pipeline keeps working afterwards.
+  never regress or silently lose a transition: bounded DURABLE retries
+  (retry_jobs + targeted publications), then quarantine, and the pipeline
+  keeps working afterwards (Milestone 4).
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from tests.m3_harness import (
     order_rows,
     place_order,
     wait_for_status,
+    wait_until,
 )
 
 
@@ -80,33 +82,42 @@ async def test_disordered_event_is_dead_lettered_without_losing_work(
     pipeline, async_client, customer_token
 ):
     """order.paid arriving while the order is still PENDING (unexpected
-    disorder): bounded deferred retry, then dead-letter + ACK — no backward
-    transition, no wedge, and the REAL chain still completes afterwards."""
-    # Short defer cycles so the bounded retry is observable in test time.
-    pipeline.start_consumers("restaurant", precondition_delays=(0.1,))
+    disorder): bounded DURABLE retries (retry_jobs attempts 2..4 with
+    targeted publications), then quarantine + dead-exchange publication —
+    no backward transition, no wedge, and the REAL chain still completes
+    afterwards (Milestone 4 replaces the old in-process defer stopgap)."""
+    pipeline.start_consumers("restaurant")
+    pipeline.start_dispatcher()
 
     order_id = await place_order(async_client, customer_token)  # PENDING
     early_paid = build_envelope(ORDER_PAID, order_id, 2)
     await pipeline.publish_to_queue(pipeline.names.restaurant_queue, early_paid)
 
-    # The event ends up on the dead-letter queue (retry budget exhausted).
-    dead = await pipeline.drain_queue(pipeline.names.dead_queue)
+    # The event ends up quarantined on the dead-letter queue (retry budget
+    # exhausted; test retry delays 0.2/0.4/0.8s -> ~1.5s end to end).
+    dead = await pipeline.drain_queue(pipeline.names.dead_queue, first_timeout=10.0)
     assert len(dead) == 1
     assert dead[0]["event_type"] == ORDER_PAID
-    assert dead[0]["event_id"] == early_paid["event_id"]
+    assert dead[0]["event_id"] == early_paid["event_id"]  # immutable identity
 
     # No lost/backward transition: the order never left PENDING, no marker
-    # was written for a transaction that did not commit.
+    # was written for a transaction that did not commit — only the durable
+    # QUARANTINED marker of the exhausted delivery.
     order = await get_order_row(order_id)
     assert order.status == "PENDING" and order.version == 1
     rows = await order_rows(order_id)
     assert [h.version for h in rows["history"]] == [1]
-    assert rows["processed"] == []
+    assert [m.outcome for m in rows["processed"]] == ["QUARANTINED"]
+    # Three bounded retry jobs were durably scheduled (attempts 2,3,4) and
+    # the last one is EXHAUSTED — the attempt counter survives restarts.
+    assert [j.attempt for j in rows["retries"]] == [2, 3, 4]
+    assert rows["retries"][-1].state == "EXHAUSTED"
+    assert len(rows["quarantined"]) == 1
+    assert rows["quarantined"][0].failure_code == "RESTAURANT_RETRIES_EXHAUSTED"
 
     # The poison copy is gone (ACKed from the main queue) ...
     await pipeline.assert_queue_empty(pipeline.names.restaurant_queue, settle=0.5)
     # ... and the pipeline is not wedged: run the real chain to completion.
-    pipeline.start_dispatcher()
     pipeline.start_consumers("payment")
     pipeline.start_consumers("delivery")
     pipeline.start_consumers("notification")
@@ -116,31 +127,60 @@ async def test_disordered_event_is_dead_lettered_without_losing_work(
     rows = await order_rows(order_id)
     assert [h.version for h in rows["history"]] == [1, 2, 3, 4]
     assert len(rows["payments"]) == 1 and len(rows["assignments"]) == 1
-    # We already drained (consumed) the one dead-lettered copy above, and the
-    # real chain dead-lettered NOTHING: the queue must still be empty.
+    # We already drained (consumed) the one quarantined copy above, and the
+    # real chain quarantined NOTHING: the queue must still be empty.
     assert await pipeline.queue_depth(pipeline.names.dead_queue) == 0
 
 
 async def test_precondition_defer_retries_until_state_catches_up(
-    pipeline, async_client, customer_token
+    pipeline, async_client, customer_token, monkeypatch
 ):
-    """A disordered event that RESOLVES itself during the bounded defer window
-    is processed (not dead-lettered): order.paid injected while the order is
-    PENDING; payment settles during the defer; restaurant then confirms."""
-    # Restaurant alone first, with generous defer cycles.
-    pipeline.start_consumers("restaurant", precondition_delays=(0.5, 1.0, 2.0))
+    """A disordered event that RESOLVES itself within the durable retry budget
+    is processed (not quarantined): order.paid injected while the order is
+    PENDING; payment settles during the retry window; restaurant then
+    confirms on a later attempt — event_id preserved, one CONFIRMED."""
+    from app.core.config import get_settings
+
+    # Wider retry window so the prerequisite settles well before exhaustion.
+    monkeypatch.setattr(get_settings(), "retry_delays_seconds", "1,2,4")
+
+    pipeline.start_consumers("restaurant")
 
     order_id = await place_order(async_client, customer_token)  # PENDING, no dispatcher
     early_paid = build_envelope(ORDER_PAID, order_id, 2)
     await pipeline.publish_to_queue(pipeline.names.restaurant_queue, early_paid)
 
-    # During the defer window the real chain settles the prerequisite state.
+    # During the retry window the real chain settles the prerequisite state.
     pipeline.start_dispatcher()
     pipeline.start_consumers("payment")
     pipeline.start_consumers("delivery")
     pipeline.start_consumers("notification")
 
     await wait_for_status(order_id, "DRIVER_ASSIGNED")
+
+    # The disordered copy's DUE durable retry lands and is processed once the
+    # prerequisite state exists — poll for its committed marker rather than
+    # sampling, so the assertion can never race the retry schedule.
+    async def _early_marker() -> bool:
+        async with session_scope() as session:
+            markers = list(
+                (
+                    await session.execute(
+                        select(ProcessedEvent).where(
+                            ProcessedEvent.order_id == order_id,
+                            ProcessedEvent.consumer_name == "restaurant",
+                        )
+                    )
+                ).scalars()
+            )
+        return any(m.event_id == early_paid["event_id"] for m in markers)
+
+    await wait_until(
+        _early_marker,
+        timeout=20.0,
+        message="early order.paid durable retry produced its marker",
+    )
+
     await pipeline.assert_queue_empty(pipeline.names.restaurant_queue, settle=0.75)
     await pipeline.assert_queue_empty(pipeline.names.dead_queue, settle=0.75)
     pipeline.raise_if_task_failed()
@@ -150,8 +190,8 @@ async def test_precondition_defer_retries_until_state_catches_up(
     assert len(rows["payments"]) == 1 and len(rows["assignments"]) == 1
     # Dead-letter queue stayed EMPTY: the resolved disorder was processed.
     assert await pipeline.queue_depth(pipeline.names.dead_queue) == 0
-    # The deferred event got a committed marker (its transition committed
-    # once the prerequisite arrived) — no silent loss.
+    # The retried event got a committed marker (its transition committed
+    # once the prerequisite arrived) — no silent loss, no quarantine.
     async with session_scope() as session:
         restaurant_markers = list(
             (
@@ -164,3 +204,4 @@ async def test_precondition_defer_retries_until_state_catches_up(
             ).scalars()
         )
     assert any(m.event_id == early_paid["event_id"] for m in restaurant_markers)
+    assert not any(m.outcome == "QUARANTINED" for m in restaurant_markers)

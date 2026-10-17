@@ -42,14 +42,15 @@ def simulate_delivery(mode: str) -> str:
     if mode == "always_fail":
         return "fail"
     raise RuntimeError(
-        f"DELIVERY_MODE={mode!r} is not supported before Milestone 4; "
+        f"DELIVERY_MODE={mode!r} is not supported; "
         "use always_succeed, always_fail or crash_after_checkpoint"
     )
 
 
 async def process_delivery(
-    session: AsyncSession, envelope: EventEnvelope, order: Order
+    session: AsyncSession, envelope: EventEnvelope, order: Order, attempt: int
 ) -> ProcessOutcome:
+    del attempt  # delivery has no attempt-sensitive simulation in Milestone 4
     if order.status in (sm.PENDING, sm.PAID):
         # order.confirmed arriving before the restaurant confirmed: disorder.
         raise PreconditionNotMetError(

@@ -1,28 +1,41 @@
 """Shared worker runtime: connection, consume loop, ACK protocol, recovery.
 
-Message protocol (assignment §10, prompt §5) — ACK only after commit:
+Message protocol (assignment §9-§11; Milestone 4 durable retries):
 
-1. Parse envelope (schema_version + shape). Malformed / unsupported schema ->
-   publish to the dead-letter topology + ACK (never retried forever; durable
-   `quarantine_records` arrive with Milestone 4). A well-formed FUTURE event
-   type is logged + ACKed (assignment §9).
-2. Stage simulation delay (deterministic demo control).
-3. ONE database transaction: lock the order row (FOR UPDATE), check
+1. Parse envelope (schema_version + shape):
+   - MALFORMED or unsupported schema version -> durable quarantine (record +
+     transactional dead-exchange publication) in one commit, then ACK.
+     Retries are bypassed: a broken message never becomes valid by waiting.
+   - Well-formed FUTURE event type -> the notification worker ACKs it with a
+     structured log (explicitly permitted by assignment §9); any OTHER
+     consumer quarantines it (never a silent ack of an unknown business event).
+2. Read the DURABLE delivery attempt number from retry_jobs (attempt 1 =
+   initial delivery; attempts survive worker and broker restarts).
+3. Stage simulation delay (deterministic demo control).
+4. ONE database transaction: lock the order row (FOR UPDATE), check
    (consumer_name, event_id) dedup -> committed marker means no-op ACK;
    otherwise run the stage processor (effects + history + child outbox event)
    and insert the processed marker in the SAME transaction. Commit.
-4. Only after a successful commit: ACK. `crash_after_checkpoint` mode exits
+5. Only after a successful commit: ACK. `crash_after_checkpoint` mode exits
    the PROCESS here (post-commit, pre-ACK) — redelivery then no-ops via dedup.
-5. Failure handling, never an immediate nack/requeue loop:
-   - DB/processing error -> the message stays UNACKED and the SAME transaction
-     is retried IN PLACE with bounded growing backoff (1..30s); shutdown
-     requeues it once for redelivery; no false ACK is ever produced.
-   - precondition-not-met (disorder) -> bounded deferred retry, then
-     dead-letter + ACK (Milestone 4 replaces this stopgap with durable
-     retry_jobs/quarantine — documented).
-   - connection/channel loss -> the consume stream ends, the caller applies
-     bounded reconnect backoff and re-declares topology; unacked messages are
-     redelivered by the broker.
+6. Classified failure handling (never an immediate nack/requeue loop):
+   - transient processing error / precondition-behind / missing order ->
+     the business transaction is ROLLED BACK, then ONE transaction persists
+     the next bounded retry (retry_jobs row, unique per consumer/event/
+     attempt, plus its scheduled TARGETED outbox publication to only this
+     queue via the default exchange) — and only then is the original message
+     acknowledged. Durably scheduled retries use the configured delays
+     (default 2s, 10s, 30s after attempts 1..3; attempt 4 is the last).
+   - retry exhaustion -> terminal order transition where the current state
+     permits it (payment PENDING->PAYMENT_FAILED, restaurant PAID->FAILED,
+     delivery CONFIRMED->FAILED; notifications never touch order state) +
+     failure event + durable quarantine record + dead-exchange publication,
+     all in one commit, then ACK.
+   - if RETRY/QUARANTINE PERSISTENCE itself fails, the message is never
+     acknowledged: bounded in-place backoff, then redelivery on reconnect.
+7. Connection/channel loss ends the consume stream; the caller applies
+   bounded reconnect backoff and re-declares topology; unacked messages are
+   redelivered by the broker.
 
 Shutdown: stop accepting new messages, finish the in-flight one (bounded
 wait), then close the channel so any unacked copy is redelivered elsewhere.
@@ -31,11 +44,13 @@ wait), then close the channel so any unacked copy is redelivered elsewhere.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import signal
+import time
 import uuid
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 
 import aio_pika
 from sqlalchemy.exc import IntegrityError
@@ -47,35 +62,35 @@ from app.db.models.order import Order
 from app.db.models.processed_event import ProcessedEvent
 from app.db.session import check_database, dispose_engine, session_scope
 from app.messaging.envelope import EnvelopeError, parse_envelope
-from app.messaging.publisher import Publisher, PublishError
-from app.messaging.topology import TopologyNames, declare_topology
+from app.messaging.topology import declare_topology
+from app.repositories import messaging as messaging_repo
 from app.repositories import orders as orders_repo
 from app.repositories import processed_events as dedup_repo
 from app.schemas.events import EventEnvelope
+from app.services import quarantine_service
 from app.services.processing import (
     MissingOrderError,
     PreconditionNotMetError,
     ProcessOutcome,
+    TransientProcessingError,
 )
 
 logger = logging.getLogger("quickbite.worker")
 
-Processor = Callable[[AsyncSession, EventEnvelope, Order], Awaitable[ProcessOutcome]]
+Processor = Callable[[AsyncSession, EventEnvelope, Order, int], Awaitable[ProcessOutcome]]
 
 # Bounded startup/database backoff (then exit 1: Compose restarts the worker).
 _DB_RETRY_DELAYS_S = (1.0, 2.0, 5.0, 10.0)
 # Bounded broker reconnect backoff (delays capped; retries continue while run).
 _CONNECT_DELAYS_S = (1.0, 2.0, 5.0, 10.0, 30.0)
-# In-place processing-error backoff (capped); the message stays unacked.
-_PROCESSING_DELAYS_S = (1.0, 2.0, 5.0, 10.0, 30.0)
-# Bounded deferred retry for precondition-not-met disorder (Milestone 4 will
-# replace this in-process stopgap with durable retry_jobs + quarantine).
-_PRECONDITION_DEFER_DELAYS_S = (1.0, 2.0, 4.0)
-# Bounded retries to park a message on the dead-letter exchange before we
-# requeue it for a later attempt (never drop, never spin).
-_PARK_ATTEMPTS = 3
-_PARK_RETRY_DELAY_S = 2.0
+# Bounded backoff while RETRY/QUARANTINE PERSISTENCE fails — the message stays
+# UNACKED throughout (assignment §11: never ack away work we failed to park).
+_RETRY_PERSIST_DELAYS_S = (1.0, 2.0, 5.0, 10.0, 30.0)
 _SHUTDOWN_INFLIGHT_TIMEOUT_S = 30.0
+
+# Physical crash checkpoints (protected demo control: CRASH_POINT env var,
+# honoured outside the test environment only; assignment §12/§14).
+_CRASH_EXIT_CODES = {"before_commit": 71, "during_retry_persistence": 72}
 
 _STAGE_MODE_ATTR = {
     "payment": "payment_mode",
@@ -98,6 +113,23 @@ _DUPLICATE_CONSTRAINT_MARKERS = (
     "uq_order_status_history",
 )
 
+# Failure classifications emitted in structured logs (M4 §10).
+CLASS_TRANSIENT = "transient_processing_error"
+CLASS_PRECONDITION = "precondition_not_met"
+CLASS_MISSING_ORDER = "missing_order"
+CLASS_MALFORMED = "malformed_envelope"
+CLASS_UNSUPPORTED_SCHEMA = "unsupported_schema_version"
+CLASS_UNKNOWN_TYPE = "unknown_event_type"
+
+_ALLOWED_MODES = {
+    "payment": frozenset(
+        {"always_succeed", "fail_twice", "always_fail", "always_decline", "crash_after_checkpoint"}
+    ),
+    "restaurant": frozenset({"always_succeed", "always_fail", "crash_after_checkpoint"}),
+    "delivery": frozenset({"always_succeed", "always_fail", "crash_after_checkpoint"}),
+    "notification": frozenset({"always_succeed", "always_fail", "crash_after_checkpoint"}),
+}
+
 
 class StreamEndedError(ConnectionError):
     """Consume stream ended WITHOUT a shutdown request: the channel or
@@ -106,19 +138,16 @@ class StreamEndedError(ConnectionError):
 
 
 def validate_stage_modes(consumer_name: str) -> None:
-    """Fail fast at startup on controls that require Milestone 4 machinery —
-    never a half-implemented retry path (assignment §16 milestone gates)."""
+    """Fail fast at startup on demo controls this consumer does not support —
+    deterministic simulation only ever comes from environment configuration
+    (assignment §12), never from checkout request fields."""
     settings = get_settings()
-    mode = getattr(settings, _STAGE_MODE_ATTR[consumer_name])
-    if mode == "fail_twice":
+    attr = _STAGE_MODE_ATTR[consumer_name]
+    mode = getattr(settings, attr)
+    if mode not in _ALLOWED_MODES[consumer_name]:
         raise SystemExit(
-            f"{_STAGE_MODE_ATTR[consumer_name].upper()}=fail_twice requires the "
-            "Milestone 4 retry scheduler; use always_succeed/always_fail until then"
-        )
-    if consumer_name == "notification" and mode != "always_succeed":
-        raise SystemExit(
-            f"NOTIFICATION_MODE={mode} failure/quarantine handling arrives with "
-            "Milestone 4; use always_succeed until then"
+            f"{attr.upper()}={mode!r} is not supported for the {consumer_name} "
+            f"worker; allowed: {sorted(_ALLOWED_MODES[consumer_name])}"
         )
 
 
@@ -144,10 +173,44 @@ def _is_duplicate_race(exc: IntegrityError) -> bool:
     return any(marker in str(exc) for marker in _DUPLICATE_CONSTRAINT_MARKERS)
 
 
+def _maybe_crash(checkpoint: str, *, consumer_name: str, event_id: str | None) -> None:
+    """Protected crash-recovery demo control (CRASH_POINT): exits the process
+    at a chosen failure boundary OUTSIDE the test environment; under test it
+    only logs, so the suite can never be killed by a demo control."""
+    settings = get_settings()
+    if settings.crash_point != checkpoint:
+        return
+    if settings.environment == "test":
+        logger.critical(
+            "crash checkpoint reached (no process exit under test)",
+            extra={
+                "consumer": consumer_name,
+                "event_id": event_id,
+                "result": f"crash_{checkpoint}_simulated",
+            },
+        )
+        return
+    logger.critical(
+        "crash checkpoint: exiting the process on purpose",
+        extra={
+            "consumer": consumer_name,
+            "event_id": event_id,
+            "result": f"crash_{checkpoint}",
+        },
+    )
+    os._exit(_CRASH_EXIT_CODES[checkpoint])
+
+
+async def _attempt_number(consumer_name: str, event_id: str) -> int:
+    async with session_scope() as session:
+        return await messaging_repo.current_attempt(session, consumer_name, event_id)
+
+
 async def _run_transaction(
     consumer_name: str,
     envelope: EventEnvelope,
     processor: Processor,
+    attempt: int,
 ) -> ProcessOutcome:
     """The single business transaction: lock -> dedup -> effects -> marker."""
     async with session_scope() as session:
@@ -159,7 +222,7 @@ async def _run_transaction(
         )
         if marker is not None:
             return ProcessOutcome("duplicate")
-        outcome = await processor(session, envelope, order)
+        outcome = await processor(session, envelope, order, attempt)
         session.add(
             ProcessedEvent(
                 id=f"pe_{uuid.uuid4().hex}",
@@ -181,121 +244,257 @@ async def _sleep_or_stopping(seconds: float, stop_event: asyncio.Event) -> bool:
         return False
 
 
-async def _dead_letter(
-    message: aio_pika.abc.AbstractIncomingMessage,
-    publisher: Publisher,
-    names: TopologyNames,
-    *,
-    payload: dict,
-    consumer_name: str,
-    reason: str,
-) -> bool:
-    """Route to the dead exchange (routing `failed`) then ACK.
-
-    False -> the caller retries/requeues; we never ACK work we failed to park.
-    """
+async def _requeue_on_shutdown(message: aio_pika.abc.AbstractIncomingMessage) -> None:
     try:
-        await publisher.publish(
-            exchange=names.dead_exchange,
-            routing_key=names.dead_routing_key,
-            payload=payload,
-        )
-    except PublishError as exc:
-        logger.error(
-            "dead-letter publish failed",
-            extra={
-                "consumer": consumer_name,
-                "event_id": message.message_id,
-                "result": f"dead_letter_failed:{exc.reason}",
-                "detail": exc.detail[:500],
-            },
-        )
-        return False
-    await message.ack()
-    logger.warning(
-        "message dead-lettered",
-        extra={
-            "consumer": consumer_name,
-            "event_id": message.message_id,
-            "order_id": payload.get("order_id"),
-            "result": f"dead_letter:{reason}",
-        },
-    )
-    return True
+        await message.nack(requeue=True)
+    except Exception:  # noqa: BLE001 — channel may already be gone; unacked
+        pass  # copies survive channel/connection loss and are redelivered
 
 
-async def _park_or_requeue(
+async def _persist_failure(
     message: aio_pika.abc.AbstractIncomingMessage,
-    publisher: Publisher,
-    names: TopologyNames,
     *,
-    payload: dict,
     consumer_name: str,
-    reason: str,
+    queue_name: str,
+    envelope: EventEnvelope,
+    attempt: int,
+    classification: str,
+    error_text: str,
     stop_event: asyncio.Event,
-) -> None:
-    """Bounded park attempts; never an unbounded spin, never a false ACK."""
-    for _ in range(_PARK_ATTEMPTS):
-        if await _dead_letter(
-            message,
-            publisher,
-            names,
-            payload=payload,
-            consumer_name=consumer_name,
-            reason=reason,
-        ):
-            return  # acked
-        if await _sleep_or_stopping(_PARK_RETRY_DELAY_S, stop_event):
-            try:
-                await message.nack(requeue=True)
-            except Exception:  # noqa: BLE001 — channel may already be gone;
-                pass  # the broker requeues unacked copies on channel loss anyway
-            logger.info(
-                "message requeued during shutdown",
+) -> bool:
+    """Durably schedule the next bounded retry, or exhaust to quarantine.
+
+    Runs AFTER the failed business transaction rolled back. One transaction
+    persists everything (retry job + scheduled targeted publication, or
+    terminal transition + failure event + quarantine record + dead
+    publication); the caller acks the original message only on success. If
+    persistence itself keeps failing, the message stays UNACKED with bounded
+    backoff — never acknowledged away, never an unbounded spin.
+    """
+    settings = get_settings()
+    delays = settings.retry_delays
+    exhausted = attempt >= len(delays) + 1
+    backoff = list(_RETRY_PERSIST_DELAYS_S)
+    while True:
+        try:
+            quarantine = None
+            async with session_scope() as session:
+                if exhausted:
+                    order = await orders_repo.get_order_for_update(session, envelope.order_id)
+                    terminal = await quarantine_service.apply_exhaustion_terminal(
+                        session, consumer_name=consumer_name, envelope=envelope, order=order
+                    )
+                    quarantine = await quarantine_service.quarantine_event(
+                        session,
+                        consumer_name=consumer_name,
+                        queue_name=queue_name,
+                        envelope=envelope,
+                        envelope_payload=envelope.to_payload(),
+                        attempts=attempt,
+                        failure_code=terminal.failure_code,
+                        reason=(
+                            f"{classification} on final attempt {attempt}: "
+                            f"{error_text[:500]} — {terminal.failure_reason}"
+                        ),
+                    )
+                    await messaging_repo.mark_job_exhausted(
+                        session,
+                        consumer_name=consumer_name,
+                        event_id=envelope.event_id,
+                        attempt=attempt,
+                    )
+                    session.add(
+                        ProcessedEvent(
+                            id=f"pe_{uuid.uuid4().hex}",
+                            consumer_name=consumer_name,
+                            event_id=envelope.event_id,
+                            order_id=envelope.order_id,
+                            outcome="QUARANTINED",
+                        )
+                    )
+                    _maybe_crash(
+                        "during_retry_persistence",
+                        consumer_name=consumer_name,
+                        event_id=envelope.event_id,
+                    )
+                else:
+                    schedule = await messaging_repo.schedule_retry(
+                        session,
+                        consumer_name=consumer_name,
+                        event_id=envelope.event_id,
+                        event_type=envelope.event_type,
+                        order_id=envelope.order_id,
+                        envelope_payload=envelope.to_payload(),
+                        target_queue=queue_name,
+                        attempt=attempt + 1,
+                        delay_seconds=delays[attempt - 1],
+                        last_error=f"{classification}: {error_text}",
+                    )
+                    _maybe_crash(
+                        "during_retry_persistence",
+                        consumer_name=consumer_name,
+                        event_id=envelope.event_id,
+                    )
+                    logger.warning(
+                        "transient failure; durable retry scheduled",
+                        extra={
+                            "consumer": consumer_name,
+                            "event_id": envelope.event_id,
+                            "order_id": envelope.order_id,
+                            "correlation_id": envelope.correlation_id,
+                            "classification": classification,
+                            "attempt": attempt,
+                            "next_attempt": schedule.attempt,
+                            "retry_in_s": schedule.due_in_seconds,
+                            "target_queue": schedule.target_queue,
+                            "result": "retry_scheduled",
+                        },
+                    )
+                    return True
+            if exhausted:
+                quarantine_state = (
+                    "duplicate" if quarantine and quarantine.duplicate else "recorded"
+                )
+                logger.critical(
+                    "retry attempts exhausted; event quarantined",
+                    extra={
+                        "consumer": consumer_name,
+                        "event_id": envelope.event_id,
+                        "order_id": envelope.order_id,
+                        "correlation_id": envelope.correlation_id,
+                        "classification": classification,
+                        "attempt": attempt,
+                        "quarantine": quarantine_state,
+                        "result": "retries_exhausted",
+                    },
+                )
+            return True
+        except Exception as exc:  # noqa: BLE001 — persistence failure, classified
+            delay = backoff.pop(0) if backoff else _RETRY_PERSIST_DELAYS_S[-1]
+            logger.error(
+                "retry persistence failed; message kept unacked",
+                extra={
+                    "consumer": consumer_name,
+                    "event_id": envelope.event_id,
+                    "order_id": envelope.order_id,
+                    "classification": classification,
+                    "attempt": attempt,
+                    "retry_in_s": delay,
+                    "result": f"persist_failed:{type(exc).__name__}",
+                    "detail": str(exc)[:500],
+                },
+            )
+            if await _sleep_or_stopping(delay, stop_event):
+                await _requeue_on_shutdown(message)
+                logger.info(
+                    "message requeued for redelivery during shutdown",
+                    extra={
+                        "consumer": consumer_name,
+                        "event_id": envelope.event_id,
+                        "result": "requeued_on_shutdown",
+                    },
+                )
+                return False
+
+
+async def _quarantine_invalid(
+    message: aio_pika.abc.AbstractIncomingMessage,
+    *,
+    consumer_name: str,
+    queue_name: str,
+    stop_event: asyncio.Event,
+    envelope: EventEnvelope | None = None,
+    raw_payload: dict | None = None,
+    failure_code: str = CLASS_MALFORMED,
+    reason: str = "",
+    envelope_payload: dict | None = None,
+) -> bool:
+    """Durable quarantine for a message that must NOT be retried (malformed,
+    unsupported schema version, unknown business event type). Returns True
+    when the quarantine committed (caller ACKs); False only on shutdown
+    (message requeued, never acknowledged away)."""
+    backoff = list(_RETRY_PERSIST_DELAYS_S)
+    while True:
+        try:
+            async with session_scope() as session:
+                if envelope is not None:
+                    outcome = await quarantine_service.quarantine_event(
+                        session,
+                        consumer_name=consumer_name,
+                        queue_name=queue_name,
+                        envelope=envelope,
+                        envelope_payload=envelope_payload or envelope.to_payload(),
+                        attempts=1,
+                        failure_code=failure_code,
+                        reason=reason,
+                    )
+                elif raw_payload is not None:
+                    outcome = await quarantine_service.quarantine_raw_event(
+                        session,
+                        consumer_name=consumer_name,
+                        queue_name=queue_name,
+                        raw_payload=raw_payload,
+                        attempts=1,
+                        failure_code=failure_code,
+                        reason=reason,
+                    )
+                else:
+                    outcome = await quarantine_service.quarantine_malformed(
+                        session,
+                        consumer_name=consumer_name,
+                        queue_name=queue_name,
+                        raw_body=message.body,
+                        failure_code=failure_code,
+                        reason=reason,
+                    )
+            logger.warning(
+                "message quarantined",
                 extra={
                     "consumer": consumer_name,
                     "event_id": message.message_id,
-                    "result": "requeued_on_shutdown",
+                    "classification": failure_code,
+                    "quarantine": "duplicate" if outcome.duplicate else "recorded",
+                    "result": "quarantined",
                 },
             )
-            return
-    # Broker accepted connections but refused the dead exchange repeatedly:
-    # requeue so the copy survives; redelivery retries the park with bounded
-    # 2s spacing and a loud log (durable quarantine recording: Milestone 4).
-    logger.error(
-        "dead-letter parking failed repeatedly; requeueing for a later attempt",
-        extra={
-            "consumer": consumer_name,
-            "event_id": message.message_id,
-            "result": f"dead_letter_exhausted:{reason}",
-        },
-    )
-    try:
-        await message.nack(requeue=True)
-    except Exception:  # noqa: BLE001 — unacked copies survive channel loss
-        pass
+            return True
+        except Exception as exc:  # noqa: BLE001 — persistence failure, classified
+            delay = backoff.pop(0) if backoff else _RETRY_PERSIST_DELAYS_S[-1]
+            logger.error(
+                "quarantine persistence failed; message kept unacked",
+                extra={
+                    "consumer": consumer_name,
+                    "event_id": message.message_id,
+                    "classification": failure_code,
+                    "retry_in_s": delay,
+                    "result": f"quarantine_failed:{type(exc).__name__}",
+                    "detail": str(exc)[:500],
+                },
+            )
+            if await _sleep_or_stopping(delay, stop_event):
+                await _requeue_on_shutdown(message)
+                return False
 
 
 async def _handle_message(
     message: aio_pika.abc.AbstractIncomingMessage,
     *,
     consumer_name: str,
+    queue_name: str,
     processor: Processor,
     expected_types: frozenset[str],
     delay_seconds: float,
-    names: TopologyNames,
-    publisher: Publisher,
     stop_event: asyncio.Event,
-    precondition_delays: Sequence[float],
-    processing_delays: Sequence[float],
 ) -> None:
     # ---- 1. envelope validation -----------------------------------------
     try:
         envelope = parse_envelope(message.body)
     except EnvelopeError as exc:
-        if exc.reason == "unknown_event_type":
+        if exc.reason == "unknown_event_type" and consumer_name == "notification":
+            # Assignment §9: a valid FUTURE event type the notification worker
+            # intentionally ignores is acknowledged with a structured log.
             logger.info(
-                "ignoring well-formed future event type",
+                "ignoring well-formed future event type (assignment §9)",
                 extra={
                     "consumer": consumer_name,
                     "event_id": message.message_id,
@@ -304,29 +503,54 @@ async def _handle_message(
             )
             await message.ack()
             return
+        if exc.reason == "unknown_event_type":
+            logger.error(
+                "unknown business event type; quarantining",
+                extra={
+                    "consumer": consumer_name,
+                    "event_id": message.message_id,
+                    "classification": CLASS_UNKNOWN_TYPE,
+                    "result": "quarantine_unknown_event_type",
+                },
+            )
+            try:
+                parsed_raw = json.loads(message.body)
+            except (ValueError, UnicodeDecodeError):
+                parsed_raw = None
+            if await _quarantine_invalid(
+                message,
+                consumer_name=consumer_name,
+                queue_name=queue_name,
+                stop_event=stop_event,
+                raw_payload=parsed_raw if isinstance(parsed_raw, dict) else None,
+                failure_code=CLASS_UNKNOWN_TYPE,
+                reason=f"event type {exc.detail!r} is not part of schema v1",
+            ):
+                await message.ack()
+            return
+        classification = (
+            CLASS_UNSUPPORTED_SCHEMA
+            if exc.reason == "unsupported_schema_version"
+            else CLASS_MALFORMED
+        )
         logger.error(
-            "malformed message",
+            "malformed message; quarantining without retries",
             extra={
                 "consumer": consumer_name,
                 "event_id": message.message_id,
-                "result": f"rejected:{exc.reason}",
+                "classification": classification,
+                "result": f"quarantine:{exc.reason}",
             },
         )
-        await _park_or_requeue(
+        if await _quarantine_invalid(
             message,
-            publisher,
-            names,
-            payload={
-                "event_id": message.message_id or f"malformed_{uuid.uuid4().hex}",
-                "reason": exc.reason,
-                "detail": exc.detail[:1000],
-                "body": message.body.decode("utf-8", errors="replace")[:2000],
-                "consumer": consumer_name,
-            },
             consumer_name=consumer_name,
-            reason=exc.reason,
+            queue_name=queue_name,
             stop_event=stop_event,
-        )
+            failure_code=classification,
+            reason=f"{exc.reason}: {exc.detail[:500]}",
+        ):
+            await message.ack()
         return
 
     if envelope.event_type not in expected_types:
@@ -343,113 +567,75 @@ async def _handle_message(
         await message.ack()
         return
 
-    # ---- 2. deterministic stage latency ---------------------------------
+    # ---- 2. durable attempt number + deterministic latency ---------------
+    attempt = await _attempt_number(consumer_name, envelope.event_id)
     if delay_seconds > 0:
         await asyncio.sleep(delay_seconds)
 
     # ---- 3. transactional processing with classified failure handling ----
-    precondition_attempts = 0
-    processing_attempts = 0
-    while True:
-        try:
-            outcome = await _run_transaction(consumer_name, envelope, processor)
-            break
-        except PreconditionNotMetError:
-            precondition_attempts += 1
-            if precondition_attempts > len(precondition_delays):
-                logger.warning(
-                    "precondition never met; dead-lettering (durable quarantine "
-                    "arrives with Milestone 4)",
-                    extra={
-                        "consumer": consumer_name,
-                        "event_id": envelope.event_id,
-                        "order_id": envelope.order_id,
-                        "correlation_id": envelope.correlation_id,
-                        "result": "precondition_exhausted",
-                    },
-                )
-                await _park_or_requeue(
-                    message,
-                    publisher,
-                    names,
-                    payload=envelope.to_payload(),
-                    consumer_name=consumer_name,
-                    reason="precondition_not_met",
-                    stop_event=stop_event,
-                )
-                return  # acked (or requeued after bounded park attempts)
-            wait_s = precondition_delays[precondition_attempts - 1]
-            logger.info(
-                "precondition not met; bounded deferred retry",
-                extra={
-                    "consumer": consumer_name,
-                    "event_id": envelope.event_id,
-                    "order_id": envelope.order_id,
-                    "correlation_id": envelope.correlation_id,
-                    "result": "precondition_defer",
-                    "retry_in_s": wait_s,
-                },
-            )
-            if await _sleep_or_stopping(wait_s, stop_event):
-                try:
-                    await message.nack(requeue=True)
-                except Exception:  # noqa: BLE001 — best effort on shutdown
-                    pass
-                return
-        except MissingOrderError:
-            logger.error(
-                "unknown order reference; dead-lettering",
-                extra={
-                    "consumer": consumer_name,
-                    "event_id": envelope.event_id,
-                    "correlation_id": envelope.correlation_id,
-                    "result": "missing_order",
-                },
-            )
-            await _park_or_requeue(
+    started = time.monotonic()
+    _maybe_crash("before_commit", consumer_name=consumer_name, event_id=envelope.event_id)
+    try:
+        outcome = await _run_transaction(consumer_name, envelope, processor, attempt)
+    except PreconditionNotMetError as exc:
+        handled = await _persist_failure(
+            message,
+            consumer_name=consumer_name,
+            queue_name=queue_name,
+            envelope=envelope,
+            attempt=attempt,
+            classification=CLASS_PRECONDITION,
+            error_text=str(exc),
+            stop_event=stop_event,
+        )
+        if handled:
+            await message.ack()
+        return
+    except MissingOrderError as exc:
+        handled = await _persist_failure(
+            message,
+            consumer_name=consumer_name,
+            queue_name=queue_name,
+            envelope=envelope,
+            attempt=attempt,
+            classification=CLASS_MISSING_ORDER,
+            error_text=str(exc),
+            stop_event=stop_event,
+        )
+        if handled:
+            await message.ack()
+        return
+    except TransientProcessingError as exc:
+        handled = await _persist_failure(
+            message,
+            consumer_name=consumer_name,
+            queue_name=queue_name,
+            envelope=envelope,
+            attempt=attempt,
+            classification=CLASS_TRANSIENT,
+            error_text=str(exc),
+            stop_event=stop_event,
+        )
+        if handled:
+            await message.ack()
+        return
+    except Exception as exc:  # noqa: BLE001 — classified, never silently acked
+        if isinstance(exc, IntegrityError) and _is_duplicate_race(exc):
+            outcome = ProcessOutcome("duplicate")
+        else:
+            handled = await _persist_failure(
                 message,
-                publisher,
-                names,
-                payload=envelope.to_payload(),
                 consumer_name=consumer_name,
-                reason="missing_order",
+                queue_name=queue_name,
+                envelope=envelope,
+                attempt=attempt,
+                classification=CLASS_TRANSIENT,
+                error_text=f"{type(exc).__name__}: {exc}",
                 stop_event=stop_event,
             )
+            if handled:
+                await message.ack()
             return
-        except Exception as exc:  # noqa: BLE001 — classified below, never acked
-            if isinstance(exc, IntegrityError) and _is_duplicate_race(exc):
-                outcome = ProcessOutcome("duplicate")
-                break
-            # DB/processing failure: keep the message UNACKED and retry the
-            # SAME transaction in place with bounded growing backoff.
-            processing_attempts += 1
-            delay = processing_delays[min(processing_attempts - 1, len(processing_delays) - 1)]
-            logger.error(
-                "processing failed; message kept unacked, retrying in place",
-                extra={
-                    "consumer": consumer_name,
-                    "event_id": envelope.event_id,
-                    "order_id": envelope.order_id,
-                    "correlation_id": envelope.correlation_id,
-                    "result": f"processing_error:{type(exc).__name__}",
-                    "retry_in_s": delay,
-                    "attempt": processing_attempts,
-                },
-            )
-            if await _sleep_or_stopping(delay, stop_event):
-                try:
-                    await message.nack(requeue=True)
-                except Exception:  # noqa: BLE001 — best effort on shutdown
-                    pass
-                logger.info(
-                    "message requeued for redelivery during shutdown",
-                    extra={
-                        "consumer": consumer_name,
-                        "event_id": envelope.event_id,
-                        "result": "requeued_on_shutdown",
-                    },
-                )
-                return
 
     # ---- 4. post-commit: checkpoint crash, then ACK ----------------------
     settings = get_settings()
@@ -484,6 +670,8 @@ async def _handle_message(
             "event_id": envelope.event_id,
             "order_id": envelope.order_id,
             "correlation_id": envelope.correlation_id,
+            "attempt": attempt,
+            "duration_ms": round((time.monotonic() - started) * 1000, 1),
             "result": outcome.result,
         },
     )
@@ -498,8 +686,6 @@ async def consume_forever(
     expected_types: frozenset[str],
     prefix: str = "",
     stop_event: asyncio.Event,
-    precondition_delays: Sequence[float] = _PRECONDITION_DEFER_DELAYS_S,
-    processing_delays: Sequence[float] = _PROCESSING_DELAYS_S,
     delay_seconds: float | None = None,
 ) -> None:
     """Consume one queue until `stop_event`.
@@ -511,10 +697,8 @@ async def consume_forever(
     `delay_seconds` overrides the configured stage delay (tests).
     """
     settings = get_settings()
-    names = TopologyNames(prefix)
     if delay_seconds is None:
         delay_seconds = getattr(settings, _STAGE_DELAY_ATTR[consumer_name])
-    publisher = Publisher(connection=connection)
 
     channel = await connection.channel()
     await channel.set_qos(prefetch_count=settings.worker_prefetch_count)
@@ -532,14 +716,11 @@ async def consume_forever(
             await _handle_message(
                 message,
                 consumer_name=consumer_name,
+                queue_name=queue_name,
                 processor=processor,
                 expected_types=expected_types,
                 delay_seconds=delay_seconds,
-                names=names,
-                publisher=publisher,
                 stop_event=stop_event,
-                precondition_delays=precondition_delays,
-                processing_delays=processing_delays,
             )
 
     consume_task = asyncio.create_task(_consume_stream())
@@ -584,7 +765,6 @@ async def consume_forever(
         await asyncio.gather(consume_task, stop_task, return_exceptions=True)
         if not channel.is_closed:
             await channel.close()
-        await publisher.close()
 
 
 async def run_worker(
@@ -668,3 +848,18 @@ async def run_worker(
             "worker stopped gracefully",
             extra={"consumer": consumer_name, "result": "stopped"},
         )
+
+
+# Re-exported for tests that build classification assertions.
+__all__ = [
+    "CLASS_MALFORMED",
+    "CLASS_MISSING_ORDER",
+    "CLASS_PRECONDITION",
+    "CLASS_TRANSIENT",
+    "CLASS_UNKNOWN_TYPE",
+    "CLASS_UNSUPPORTED_SCHEMA",
+    "StreamEndedError",
+    "consume_forever",
+    "run_worker",
+    "validate_stage_modes",
+]

@@ -1,0 +1,6 @@
+# M4 failure control: PERMANENT decline -> immediate PAYMENT_FAILED/
+# PAYMENT_DECLINED, deliberately bypassing the retry ladder.
+services:
+  payment-worker:
+    environment:
+      PAYMENT_MODE: always_decline

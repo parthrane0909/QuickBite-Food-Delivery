@@ -1,0 +1,6 @@
+# M4 failure control: permanent delivery failure -> CONFIRMED -> FAILED with
+# DRIVER_UNAVAILABLE, no assignment, no retries.
+services:
+  delivery-worker:
+    environment:
+      DELIVERY_MODE: always_fail

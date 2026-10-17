@@ -21,6 +21,7 @@ import aio_pika
 from app.core.config import get_settings
 from app.messaging.consumer_runtime import consume_forever
 from app.messaging.outbox_dispatcher import run_forever as dispatcher_run_forever
+from app.messaging.retry_scheduler import run_forever as scheduler_run_forever
 from app.messaging.topology import (
     DELIVERY_QUEUE,
     NOTIFICATION_QUEUE,
@@ -144,6 +145,8 @@ async def order_rows(order_id: str) -> dict[str, list]:
     from app.db.models.order_status_history import OrderStatusHistory
     from app.db.models.outbox_event import OutboxEvent
     from app.db.models.processed_event import ProcessedEvent
+    from app.db.models.quarantine_record import QuarantineRecord
+    from app.db.models.retry_job import RetryJob
     from app.db.models.simulated_payment import SimulatedPayment
     from app.db.session import session_scope
 
@@ -164,6 +167,8 @@ async def order_rows(order_id: str) -> dict[str, list]:
         notifications = await _all(Notification)
         outbox = await _all(OutboxEvent)
         processed = await _all(ProcessedEvent)
+        retries = sorted(await _all(RetryJob), key=lambda j: j.attempt)
+        quarantined = await _all(QuarantineRecord)
     return {
         "payments": payments,
         "history": history,
@@ -171,6 +176,8 @@ async def order_rows(order_id: str) -> dict[str, list]:
         "notifications": notifications,
         "outbox": outbox,
         "processed": processed,
+        "retries": retries,
+        "quarantined": quarantined,
     }
 
 
@@ -210,6 +217,8 @@ class PipelineHarness:
         self._channel: aio_pika.abc.AbstractChannel | None = None
         self.dispatcher_task: asyncio.Task | None = None
         self._dispatcher_stop: asyncio.Event | None = None
+        self.scheduler_task: asyncio.Task | None = None
+        self._scheduler_stop: asyncio.Event | None = None
         # (name, task, stop_event) — multiple instances of one name allowed.
         self._consumers: list[tuple[str, asyncio.Task, asyncio.Event]] = []
 
@@ -269,6 +278,8 @@ class PipelineHarness:
         tasks = [task for _, task, _ in self._consumers]
         if self.dispatcher_task is not None:
             tasks.append(self.dispatcher_task)
+        if self.scheduler_task is not None:
+            tasks.append(self.scheduler_task)
         results = await asyncio.gather(*tasks, return_exceptions=True)
         if self._channel is not None and not self._channel.is_closed:
             await self._channel.close()
@@ -297,6 +308,15 @@ class PipelineHarness:
             )
         )
         return self.dispatcher_task
+
+    def start_scheduler(self, *, poll_interval: float = 0.05) -> asyncio.Task:
+        """The REAL retry scheduler loop (same code path as the Compose
+        `retry-scheduler` service) as an asyncio task."""
+        self._scheduler_stop = asyncio.Event()
+        self.scheduler_task = asyncio.create_task(
+            scheduler_run_forever(stop_event=self._scheduler_stop, poll_interval=poll_interval)
+        )
+        return self.scheduler_task
 
     def start_consumers(
         self, name: str, *, instances: int = 1, delay_seconds: float | None = None, **consume_kwargs
@@ -352,6 +372,8 @@ class PipelineHarness:
             stop.set()
         if self._dispatcher_stop is not None:
             self._dispatcher_stop.set()
+        if self._scheduler_stop is not None:
+            self._scheduler_stop.set()
 
     def raise_if_task_failed(self) -> None:
         for name, task, _ in self._consumers:
@@ -368,6 +390,15 @@ class PipelineHarness:
             raise AssertionError(
                 f"dispatcher crashed: {self.dispatcher_task.exception()!r}"
             ) from self.dispatcher_task.exception()
+        if (
+            self.scheduler_task is not None
+            and self.scheduler_task.done()
+            and not self.scheduler_task.cancelled()
+            and self.scheduler_task.exception() is not None
+        ):
+            raise AssertionError(
+                f"retry scheduler crashed: {self.scheduler_task.exception()!r}"
+            ) from self.scheduler_task.exception()
 
     # ---- broker actions --------------------------------------------------
 
@@ -498,16 +529,76 @@ async def fetch_outbox_payload(order_id: str, event_type: str) -> dict:
 
     from app.db.models.outbox_event import OutboxEvent
     from app.db.session import session_scope
+    from app.messaging.topology import ORDERS_EXCHANGE
 
     async with session_scope() as session:
         row = (
             await session.execute(
                 select(OutboxEvent).where(
-                    OutboxEvent.order_id == order_id, OutboxEvent.event_type == event_type
+                    OutboxEvent.order_id == order_id,
+                    OutboxEvent.event_type == event_type,
+                    # Milestone 4: the SAME event id also has a targeted RETRY
+                    # publication (default exchange) and possibly a dead-letter
+                    # publication (quickbite.dead); the domain event itself is
+                    # the quickbite.orders topic row.
+                    OutboxEvent.exchange == ORDERS_EXCHANGE,
                 )
             )
         ).scalar_one()
         return dict(row.payload)
+
+
+async def outbox_rows_for_event(event_id: str) -> list:
+    """Every outbox publication row for ONE immutable event id (original
+    topic publication and/or its targeted retry copies)."""
+    from sqlalchemy import select
+
+    from app.db.models.outbox_event import OutboxEvent
+    from app.db.session import session_scope
+
+    async with session_scope() as session:
+        return list(
+            (
+                await session.execute(select(OutboxEvent).where(OutboxEvent.event_id == event_id))
+            ).scalars()
+        )
+
+
+async def retry_job_rows(consumer_name: str, event_id: str) -> list:
+    """All durable retry jobs for one (consumer, event) pair, by attempt."""
+    from sqlalchemy import select
+
+    from app.db.models.retry_job import RetryJob
+    from app.db.session import session_scope
+
+    async with session_scope() as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(RetryJob).where(
+                        RetryJob.consumer_name == consumer_name,
+                        RetryJob.event_id == event_id,
+                    )
+                )
+            ).scalars()
+        )
+    return sorted(rows, key=lambda j: j.attempt)
+
+
+async def quarantine_rows_for_event(event_id: str) -> list:
+    from sqlalchemy import select
+
+    from app.db.models.quarantine_record import QuarantineRecord
+    from app.db.session import session_scope
+
+    async with session_scope() as session:
+        return list(
+            (
+                await session.execute(
+                    select(QuarantineRecord).where(QuarantineRecord.event_id == event_id)
+                )
+            ).scalars()
+        )
 
 
 async def set_outbox_available_now(order_id: str) -> None:
