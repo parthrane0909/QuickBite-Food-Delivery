@@ -1,6 +1,0 @@
-Traceback (most recent call last):
-  File "/home/parthrane/Parth/Internship/Food Delivery App/scripts/inspect_web_runtime.py", line 334, in <module>
-    main()
-  File "/home/parthrane/Parth/Internship/Food Delivery App/scripts/inspect_web_runtime.py", line 269, in main
-    raise RuntimeError(
-RuntimeError: Customer sign-in did not reach discovery: {'href': 'http://localhost:8080/login?next=/restaurants', 'path': '/login', 'inputs': [{'label': 'Email', 'value': 'alice@quickbite.dev'}, {'label': 'Password', 'value': ''}]}

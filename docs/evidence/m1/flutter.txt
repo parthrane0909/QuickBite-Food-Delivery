@@ -1,2 +1,0 @@
-No issues found! (ran in 3.8s)
-00:00 +2: All tests passed!

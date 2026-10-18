@@ -1,2 +1,0 @@
-sign_in_button_bounds {'x': 196.5, 'y': 625, 'w': 305, 'h': 46}
-web login and discovery: PASS {"href":"http://localhost:8080/restaurants","inputs":[{"name":"Search restaurants","length":0}]} screenshot= docs/evidence/final/after-web/393_discovery.png

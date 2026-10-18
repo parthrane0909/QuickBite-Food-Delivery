@@ -1,9 +1,0 @@
-source_api_ready 200
-source_api /restaurants/cuisines 200 results 16 sample ['Bakery', 'Biryani', 'Burgers']
-source_api /restaurants?search=Spinach%20Ricotta%20Ravioli&page_size=5 200 results 5 sample ['Adyar Olive & Ember', 'Adyar Olive & Ember 2', 'Akurdi Olive & Ember']
-source_api /restaurants?cuisine=Italian&search=Risotto&page_size=5 200 results 5 sample ['Adyar Olive & Ember', 'Adyar Olive & Ember 2', 'Akurdi Olive & Ember']
-web_spa / 200 text/html
-web_spa /welcome 200 text/html
-web_spa /login 200 text/html
-web_spa /restaurants 200 text/html
-web_spa /admin 200 text/html

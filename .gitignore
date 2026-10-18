@@ -61,3 +61,97 @@ docs/ui-rehaul-review/
 
 # NOTE: dependency lockfiles (backend/uv.lock, frontend/pubspec.lock) are
 # intentionally committed — do NOT add them here.
+
+
+# ==================================
+# QuickBite — Git exclusions
+# ==================================
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+coverage/
+
+# Android / Gradle
+.gradle/
+**/android/local.properties
+**/android/.cxx/
+**/android/.externalNativeBuild/
+*.apk
+*.aab
+*.apks
+*.hprof
+
+# iOS build output
+**/ios/Pods/
+*.ipa
+*.dSYM/
+
+# Environment and credentials
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+**/key.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+**/*service-account*.json
+
+# Databases / backups
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.backup
+*.sql.gz
+
+# Logs / temporary files
+*.log
+*.tmp
+*.swp
+*.bak
+.DS_Store
+Thumbs.db
+
+# Editor files
+.idea/
+*.iml
+.vscode/.ropeproject/
+
+# Local database/docker data
+pgdata/
+postgres-data/
+rabbitmq-data/
+
+# Generated QuickBite evidence
+/docs/evidence/
+
+# Root design reference screenshots
+/quickbite_*.png
+/quickbitetemplate_*.png
+
+# Local generated submission archive
+/final.zip

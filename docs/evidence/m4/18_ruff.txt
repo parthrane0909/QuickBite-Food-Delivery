@@ -1,3 +1,0 @@
- Container quickbite-api-run-c7fb3eb7c9c8 Created 
-All checks passed!
-102 files already formatted

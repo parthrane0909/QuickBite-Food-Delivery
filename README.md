@@ -1,15 +1,14 @@
 # QuickBite — Full-Stack Food Delivery App
 
-QuickBite is a full-stack food ordering and management system: customers browse a
-paginated restaurant catalogue, check out with an idempotency key, and track an
-order through a simulated asynchronous pipeline (payment → restaurant → delivery
-→ notification). Admins can inspect orders, manage restaurants, menus and customer
-accounts, and enter the customer shopping experience as their own account.
-**PostgreSQL is the sole source of truth**; RabbitMQ only distributes work.
+QuickBite is a training full-stack food ordering system: customers browse a seeded
+restaurant catalog, check out with an idempotency key, and track an order through a
+simulated asynchronous pipeline (payment → restaurant → delivery → notification)
+while an admin observes read-only aggregates. **PostgreSQL is the sole source of
+truth**; RabbitMQ only distributes work.
 
-> Status: **M5 baseline retained; admin/catalogue extensions implemented; final
-> platform and load evidence is in progress.** See [Milestones](#milestones).
-> API
+> Status: **Milestone 5 (Complete Flutter Frontend — Android/Web, Admin
+> Overview, Platform Builds) complete**, pending milestone approval. See
+> [Milestones](#milestones) for what is and is not implemented yet. API
 > contract: [`docs/api.md`](docs/api.md); events/routing:
 > [`docs/event-contract.md`](docs/event-contract.md); reliability:
 > [`docs/reliability.md`](docs/reliability.md); frontend:
@@ -44,8 +43,6 @@ docs/event-contract.md   Envelope, the six event types, routing, retry + dead-le
 docs/architecture.md     Runtime components, data flow, module map
 docs/reliability.md      Delivery semantics, retry/quarantine lifecycle, crash windows, limits
 docs/frontend.md        Flutter architecture: state, networking, idempotency UX, polling
-docs/admin.md           Admin/customer authorization, management flows and safe catalogue seeding
-docs/performance.md     Reproducible M7 measurements and scaling caveats
 docs/platforms.md     Clean install + web/Android/iOS build & run commands (iOS pending)
 docs/openapi.json   Exported OpenAPI document (regenerate: scripts note inside docs/api.md)
 docs/evidence/      Per-milestone run evidence (m1/, m2/, m3/, m4/, m5/, …)
@@ -85,10 +82,7 @@ Services (bound to `127.0.0.1` only):
 | Customer | `carol@quickbite.dev` | `quickbite!carol1` |
 | Admin | `admin@quickbite.dev` | `quickbite!admin1` |
 
-Baseline fixtures: 4 restaurants, 24 menu items, and fictional demo accounts.
-The optional showcase catalogue currently contains 2,000 restaurants and
-19,992 menu items (integer INR minor units). It is added explicitly; ordinary
-application startup never bulk-seeds the catalogue.
+Seed data: 4 restaurants, 24 menu items, prices as integer minor units (INR paise).
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/auth/login \
@@ -110,9 +104,6 @@ cd backend && uv run --frozen ruff check . && uv run --frozen ruff format --chec
 docker compose run --rm migrate
 docker compose run --rm seed
 
-# Optional showcase catalogue (repeatable; additive and idempotent)
-docker compose exec api python -m scripts.seed_large_catalogue
-
 # Reset the database completely
 docker compose down -v && docker compose up -d --build
 
@@ -129,7 +120,7 @@ docker compose run --rm api python -m scripts.demo_failures --list
 docker compose exec rabbitmq rabbitmqctl list_bindings -q source_name destination_name routing_key
 docker compose exec rabbitmq rabbitmqctl list_queues -q name messages consumers
 
-# Flutter: static checks and the widget/DTO suite
+# Flutter: static checks and the widget/DTO suite (75 tests)
 cd frontend
 flutter pub get && flutter analyze && flutter test
 
@@ -167,9 +158,9 @@ per-worker host ports: `docker compose up -d --scale payment-worker=3`.
 | 2 | Browsing, server-priced idempotent checkout, order reads, ownership, transactional outbox | ✅ approved |
 | 3 | Outbox dispatcher, broker topology, four consumers, notifications endpoint | ✅ approved |
 | 4 | Durable retries, quarantine, failure simulation, crash recovery | ✅ approved |
-| 5 | Customer Flutter UI (Android/Web), original read-only admin overview | ✅ baseline complete |
-| 6 | Admin management extension, session hardening, docs, acceptance verification | 🟡 implementation present; final runtime/recovery matrix in progress |
-| 7 | Catalogue scale, load comparison, submission evidence | 🟡 catalogue seeded; reproducible load comparison and final evidence pending |
+| 5 | Complete Flutter UI (Android/Web), admin overview, platform builds | ✅ complete, awaiting approval |
+| 6 | Admin, hardening, docs, final verification | ⬜ not started |
+| 7 | Submission packaging | ⬜ not started |
 
 ### Milestone 2 at a glance
 

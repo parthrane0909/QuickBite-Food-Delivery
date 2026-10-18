@@ -1,1 +1,0 @@
-{"status":"ready","checks":{"postgres":"up","rabbitmq":"up"},"request_id":"0e7bcc14d03c49b78ce1e7bb45ed9cf0","time":"2026-10-16T14:27:27.797810+00:00"}
