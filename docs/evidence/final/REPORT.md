@@ -89,7 +89,8 @@ claim live GPS coordinates.
 | Flutter tests | 93 passed (`flutter-test-final.txt`) |
 | Focused admin/catalogue seed tests | 7 passed against real PostgreSQL (`catalogue-seed-test.txt`) |
 | Android debug build and emulator run | Passed; authenticated read-only customer/admin tour (`android-runtime.txt`) |
-| Flutter web release build | Passed for port 8000 and for the current port-8001 source API (`flutter-web-build-final.txt`, `flutter-web-build-runtime.txt`) |
+| Flutter web release build | Rebuilt after the final shared Flutter fixes; exit 0, nginx SPA entrypoint HTTP 200 (`web-release-build-final.txt`) |
+| Flutter web runtime | Earlier authenticated web discovery passed; interactive browser flow was not repeated after the final rebuild |
 | Web HTTP paths | `/`, `/welcome`, `/login`, `/restaurants`, `/admin` return nginx SPA HTML (`http-routes-final.txt`) |
 | Current Compose deployment | API readiness reports PostgreSQL and RabbitMQ up; authenticated catalogue search and admin summary passed; nginx returns HTTP 200 for SPA routes; final catalogue counts and migration head rechecked (`compose-final-runtime.txt`) |
 | Chrome mobile-web authentication | Passed: seeded customer sign-in reached live discovery at 393×852 (`web-interactive-smoke.txt`) |
@@ -178,8 +179,8 @@ analysis output is saved in `flutter-analyze-release-final.txt`.
 
 The focused Flutter regression run covered admin navigation, catalogue cards,
 and checkout history invalidation (34 tests; `flutter-targeted-run.txt`); all
-passed. Flutter analysis is clean. The previous full Flutter run (93 tests) and backend run
-(145 passed, one skipped) predate these presentation-only edits; complete
+passed. Flutter analysis is clean. The previous full Flutter run (93 tests)
+and backend run (145 passed, one skipped) predate these presentation-only edits; complete
 suites were not repeated because backend sources were unchanged. The earlier
 400-order scaling evidence remains applicable; this task did not change
 checkout or worker behavior.

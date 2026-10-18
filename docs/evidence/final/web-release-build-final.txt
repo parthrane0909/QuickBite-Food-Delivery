@@ -1,0 +1,12 @@
+QuickBite web release rebuild after the final shared Flutter UI corrections
+
+Command (from frontend/):
+  flutter build web --release --dart-define=API_BASE_URL=http://localhost:8000/api/v1
+
+Result: exit code 0; Flutter reported "Built build/web" after 56.5 seconds.
+The release output exists at frontend/build/web (main.dart.js: 3.2 MB).
+The project nginx SPA entrypoint returned HTTP 200 with content-type text/html
+at http://localhost:8080/ after the rebuild.
+
+This verifies compilation and SPA shell serving. A new interactive browser
+customer/admin journey was not repeated after this web-only rebuild.

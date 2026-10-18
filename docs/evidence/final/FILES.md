@@ -18,6 +18,7 @@ This manifest covers the implementation and review artifacts across the finaliza
 | `docs/evidence/final/flutter-targeted-run.txt` | Current 34-test Flutter regression output |
 | `docs/evidence/final/flutter-analyze-release-final.txt` | Current clean Flutter analysis output |
 | `docs/evidence/final/after-android/release-final-orders-physical.png` | Physical-device release order-history capture |
+| `docs/evidence/final/web-release-build-final.txt` | Final Flutter web compilation and nginx SPA shell result |
 | `scripts/build_final_evidence.py` | Build the review index with physical release evidence and artifact link |
 
 The Android APK is generated under the ignored Flutter build directory at
