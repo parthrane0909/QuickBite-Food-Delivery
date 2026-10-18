@@ -6,12 +6,16 @@
 /// explicit confirm dialog (no silent data loss) via the shared
 /// [handleCartAdd] helper.
 ///
-/// UI rehaul: photographic hero from the restaurant's real `imageAsset`
-/// (the old static brown banner is gone), a raised overlapping info card,
-/// shimmer row skeletons, pressable rows that open the NEW item detail
-/// screen, and a desktop-capped content column. The floating **View cart**
-/// bar and all contract copy are preserved (integration contract).
+/// UI rehaul v3 (reference-led): a photographic hero from the restaurant's
+/// real `imageAsset` carries the back action; a circular restaurant mark sits
+/// ON the seam between hero and content (no clipping, no layout gap); a
+/// raised info card holds the real name, description and open/closed state.
+/// Menu items render as image-led cards in a responsive Wrap (1 column on
+/// phones, 2 on tablets, 3 on desktop) — every value is API-backed. The
+/// floating **View cart** bar and all contract copy are preserved.
 library;
+
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,6 +35,9 @@ import '../../ui/widgets/pressable.dart';
 import '../../ui/widgets/quantity_stepper.dart';
 import '../cart/cart_add_actions.dart';
 
+/// Widest content column for the menu (desktop-capped, never stretched).
+const double _menuMaxWidth = 960;
+
 class RestaurantMenuScreen extends ConsumerStatefulWidget {
   const RestaurantMenuScreen({
     super.key,
@@ -45,7 +52,8 @@ class RestaurantMenuScreen extends ConsumerStatefulWidget {
   final Restaurant? restaurant;
 
   @override
-  ConsumerState<RestaurantMenuScreen> createState() => _RestaurantMenuScreenState();
+  ConsumerState<RestaurantMenuScreen> createState() =>
+      _RestaurantMenuScreenState();
 }
 
 class _RestaurantMenuScreenState extends ConsumerState<RestaurantMenuScreen> {
@@ -60,8 +68,9 @@ class _RestaurantMenuScreenState extends ConsumerState<RestaurantMenuScreen> {
 
   Future<void> _resolveRestaurant() async {
     try {
-      final found =
-          await ref.read(restaurantsProvider.notifier).byId(widget.restaurantId);
+      final found = await ref
+          .read(restaurantsProvider.notifier)
+          .byId(widget.restaurantId);
       if (mounted && _resolved == null) setState(() => _resolved = found);
     } catch (_) {
       // Header simply shows "Menu" — the menu itself still loads.
@@ -69,7 +78,9 @@ class _RestaurantMenuScreenState extends ConsumerState<RestaurantMenuScreen> {
   }
 
   void _addToCart(MenuItem item) {
-    final result = ref.read(cartControllerProvider.notifier).add(
+    final result = ref
+        .read(cartControllerProvider.notifier)
+        .add(
           item,
           restaurantId: widget.restaurantId,
           restaurantName: _resolved?.name ?? '',
@@ -96,125 +107,29 @@ class _RestaurantMenuScreenState extends ConsumerState<RestaurantMenuScreen> {
     final state = ref.watch(menuProvider(widget.restaurantId));
     final controller = ref.read(menuProvider(widget.restaurantId).notifier);
     final cart = ref.watch(cartControllerProvider);
-    final isAdmin = ref.watch(authControllerProvider.select((auth) => auth.isAdmin));
+    final isAdmin = ref.watch(
+      authControllerProvider.select((auth) => auth.isAdmin),
+    );
     final restaurant = _resolved;
+
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final contentWidth =
+        math.min(screenWidth, _menuMaxWidth) - 2 * AppSpacing.screenPadding;
+    // Rows (image + copy + control) need room either side of the photo, so a
+    // second column only appears once it can hold a readable row.
+    final columns = contentWidth >= 700 ? 2 : 1;
+    final tileWidth =
+        (contentWidth - AppSpacing.cardGap * (columns - 1)) / columns;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 880),
+          constraints: const BoxConstraints(maxWidth: _menuMaxWidth),
           child: CustomScrollView(
             slivers: [
-              // --- Photographic hero from the restaurant's real image ---
               SliverToBoxAdapter(
-                child: Stack(
-                  children: [
-                    SizedBox(
-                      height: 236,
-                      width: double.infinity,
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.only(
-                          bottomLeft: Radius.circular(AppSpacing.radiusXl),
-                          bottomRight: Radius.circular(AppSpacing.radiusXl),
-                        ),
-                        child: _MenuHero(restaurant: restaurant),
-                      ),
-                    ),
-                    const Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Color(0x661C1411),
-                              Color(0x001C1411),
-                              Color(0x991C1411),
-                            ],
-                            stops: [0.0, 0.5, 1.0],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: MediaQuery.paddingOf(context).top + 8,
-                      left: AppSpacing.md,
-                      child: _CircleAction(
-                        icon: Icons.arrow_back_rounded,
-                        tooltip: 'Back',
-                        // canPop guard: a deep-link reload (web) starts with an
-                        // empty stack, so pop() alone would have nowhere to go.
-                        onPressed: () {
-                          if (context.canPop()) {
-                            context.pop();
-                          } else {
-                            context.go('/restaurants');
-                          }
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // --- Overlapping raised info card ---
-              SliverToBoxAdapter(
-                child: Transform.translate(
-                  offset: const Offset(0, -52),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                    child: Container(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius:
-                            BorderRadius.circular(AppSpacing.radiusLg),
-                        boxShadow: AppShadow.raised,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          RestaurantAvatar(
-                            name: restaurant?.name ?? 'Menu',
-                            size: 56,
-                          ),
-                          const SizedBox(width: AppSpacing.lg),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  restaurant?.name ?? 'Menu',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.w800),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                if (restaurant?.description != null &&
-                                    restaurant!.description!.isNotEmpty) ...[
-                                  const SizedBox(height: AppSpacing.xs),
-                                  Text(
-                                    restaurant.description!,
-                                    style:
-                                        Theme.of(context).textTheme.bodySmall,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                                if (restaurant != null) ...[
-                                  const SizedBox(height: AppSpacing.sm),
-                                  _StatusPill(
-                                      available: restaurant.isAvailable),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                child: _MenuHeader(restaurant: restaurant),
               ),
 
               // --- Menu body ---
@@ -222,26 +137,26 @@ class _RestaurantMenuScreenState extends ConsumerState<RestaurantMenuScreen> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.screenPadding,
-                    AppSpacing.xs,
+                    AppSpacing.lg,
                     AppSpacing.screenPadding,
                     AppSpacing.md,
                   ),
                   child: Text(
                     'Menu',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.3,
-                        ),
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                    ),
                   ),
                 ),
               ),
               if (state.initialLoading)
-                const SliverFillRemaining(
-                  hasScrollBody: false,
+                const SliverToBoxAdapter(
                   child: Shimmer(
                     child: Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.screenPadding,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -260,7 +175,10 @@ class _RestaurantMenuScreenState extends ConsumerState<RestaurantMenuScreen> {
               else if (state.error != null && state.items.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
-                  child: ErrorState(error: state.error!, onRetry: controller.refresh),
+                  child: ErrorState(
+                    error: state.error!,
+                    onRetry: controller.refresh,
+                  ),
                 )
               else if (state.isEmpty)
                 SliverFillRemaining(
@@ -273,60 +191,55 @@ class _RestaurantMenuScreenState extends ConsumerState<RestaurantMenuScreen> {
                     onAction: controller.refresh,
                   ),
                 )
-              else
+              else ...[
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.screenPadding,
                     0,
                     AppSpacing.screenPadding,
-                    AppSpacing.xxl + 96,
+                    AppSpacing.lg,
                   ),
-                  sliver: SliverList.separated(
-                    itemCount:
-                        state.items.length + (state.hasMore || state.loadingMore ? 1 : 0),
-                    separatorBuilder: (_, _) =>
-                        const SizedBox(height: AppSpacing.cardGap),
-                    itemBuilder: (context, index) {
-                      if (index >= state.items.length) {
-                        if (state.loadingMore) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
-                            child: Center(
-                              child: SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2.4),
+                  sliver: SliverToBoxAdapter(
+                    child: Wrap(
+                      spacing: AppSpacing.cardGap,
+                      runSpacing: AppSpacing.cardGap,
+                      children: [
+                        for (var index = 0; index < state.items.length; index++)
+                          SizedBox(
+                            width: tileWidth,
+                            child: Entrance(
+                              index: index,
+                              child: _MenuTile(
+                                item: state.items[index],
+                                inCartQuantity:
+                                    cart.line(state.items[index].id)?.quantity ??
+                                    0,
+                                onTap: () => _openDetail(state.items[index]),
+                                onAdd: () => _addToCart(state.items[index]),
+                                onIncrement: () => ref
+                                    .read(cartControllerProvider.notifier)
+                                    .increment(state.items[index].id),
+                                onDecrement: () => ref
+                                    .read(cartControllerProvider.notifier)
+                                    .decrement(state.items[index].id),
                               ),
                             ),
-                          );
-                        }
-                        return Center(
-                          child: TextButton.icon(
-                            onPressed: controller.loadMore,
-                            icon: const Icon(Icons.expand_more_rounded),
-                            label: const Text('Load more'),
                           ),
-                        );
-                      }
-                      final item = state.items[index];
-                      return Entrance(
-                        index: index,
-                        child: _MenuRow(
-                          item: item,
-                          inCartQuantity: cart.line(item.id)?.quantity ?? 0,
-                          onTap: () => _openDetail(item),
-                          onAdd: () => _addToCart(item),
-                          onIncrement: () => ref
-                              .read(cartControllerProvider.notifier)
-                              .increment(item.id),
-                          onDecrement: () => ref
-                              .read(cartControllerProvider.notifier)
-                              .decrement(item.id),
-                        ),
-                      );
-                    },
+                      ],
+                    ),
                   ),
                 ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.xxl + 96),
+                    child: _MenuFooter(
+                      loadingMore: state.loadingMore,
+                      hasMore: state.hasMore,
+                      onLoadMore: controller.loadMore,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -359,6 +272,7 @@ class _RestaurantMenuScreenState extends ConsumerState<RestaurantMenuScreen> {
                       cart.subtotalMinor,
                       currency: cart.currency,
                       semanticsLabel: false,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 16,
@@ -374,8 +288,175 @@ class _RestaurantMenuScreenState extends ConsumerState<RestaurantMenuScreen> {
   }
 }
 
-class _MenuRow extends StatelessWidget {
-  const _MenuRow({
+/// Photographic hero + circular restaurant mark straddling the seam + raised
+/// info card. Fixed hero band means the mark never clips text or leaves a
+/// layout gap (the previous `Transform.translate` card did both).
+class _MenuHeader extends StatelessWidget {
+  const _MenuHeader({required this.restaurant});
+
+  final Restaurant? restaurant;
+
+  static const double _heroHeight = 196;
+  static const double _markSize = 76;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final restaurant = this.restaurant;
+    final description = restaurant?.description;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Column(
+          children: [
+            SizedBox(
+              height: _heroHeight,
+              width: double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(AppSpacing.radiusXl),
+                      bottomRight: Radius.circular(AppSpacing.radiusXl),
+                    ),
+                    child: _MenuHero(restaurant: restaurant),
+                  ),
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0x661C1411),
+                          Color(0x001C1411),
+                          Color(0x991C1411),
+                        ],
+                        stops: [0.0, 0.5, 1.0],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: MediaQuery.paddingOf(context).top + 8,
+                    left: AppSpacing.md,
+                    child: _CircleAction(
+                      icon: Icons.arrow_back_rounded,
+                      tooltip: 'Back',
+                      // canPop guard: a deep-link reload (web) starts with an
+                      // empty stack, so pop() alone would have nowhere to go.
+                      onPressed: () {
+                        if (context.canPop()) {
+                          context.pop();
+                        } else {
+                          context.go('/restaurants');
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+              ),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.xxxl + AppSpacing.xs,
+                  AppSpacing.xl,
+                  AppSpacing.lg,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                  boxShadow: AppShadow.raised,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      restaurant?.name ?? 'Menu',
+                      textAlign: TextAlign.center,
+                      style: text.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (restaurant != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      _StatusPill(available: restaurant.isAvailable),
+                    ],
+                    if (description != null && description.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        description,
+                        textAlign: TextAlign.center,
+                        style: text.bodyMedium?.copyWith(
+                          color: AppColors.inkSoft,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        // Circular restaurant mark ON the seam (photo if the API provides
+        // one, initials otherwise) — painted over the card, so it never
+        // depends on negative margins or transforms.
+        Positioned(
+          top: _heroHeight - _markSize / 2,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: _RestaurantMark(
+              restaurant: restaurant,
+              size: _markSize,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RestaurantMark extends StatelessWidget {
+  const _RestaurantMark({required this.restaurant, required this.size});
+
+  final Restaurant? restaurant;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    // Initials mark (the API ships no separate logo asset) inside a white
+    // ring so it reads as a badge on the hero seam.
+    return Container(
+      width: size,
+      height: size,
+      padding: const EdgeInsets.all(4),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        shape: BoxShape.circle,
+        boxShadow: AppShadow.card,
+      ),
+      child: RestaurantAvatar(
+        name: restaurant?.name ?? 'Menu',
+        size: size - 8,
+      ),
+    );
+  }
+}
+
+class _MenuTile extends StatelessWidget {
+  const _MenuTile({
     required this.item,
     required this.inCartQuantity,
     required this.onTap,
@@ -395,6 +476,7 @@ class _MenuRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final available = item.isAvailable;
+    final description = item.description;
     return Pressable(
       onTap: onTap,
       radius: AppSpacing.radiusMd,
@@ -414,7 +496,7 @@ class _MenuRow extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                FoodImage(itemId: item.id, assetName: item.imageAsset, size: 84),
+                FoodImage(itemId: item.id, assetName: item.imageAsset, size: 92),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
@@ -425,8 +507,11 @@ class _MenuRow extends StatelessWidget {
                           Expanded(
                             child: Text(
                               item.name,
-                              style: text.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
+                              style: text.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.1,
+                              ),
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -438,9 +523,12 @@ class _MenuRow extends StatelessWidget {
                               ),
                               decoration: BoxDecoration(
                                 color: AppColors.surfaceWarm,
-                                borderRadius:
-                                    BorderRadius.circular(AppSpacing.radiusPill),
-                                border: Border.all(color: AppColors.outlineSoft),
+                                borderRadius: BorderRadius.circular(
+                                  AppSpacing.radiusPill,
+                                ),
+                                border: Border.all(
+                                  color: AppColors.outlineSoft,
+                                ),
                               ),
                               child: const Text(
                                 'Unavailable',
@@ -453,12 +541,13 @@ class _MenuRow extends StatelessWidget {
                             ),
                         ],
                       ),
-                      if (item.description != null && item.description!.isNotEmpty) ...[
-                        const SizedBox(height: 2),
+                      if (description != null && description.isNotEmpty) ...[
+                        const SizedBox(height: 3),
                         Text(
-                          item.description!,
-                          style: text.bodySmall
-                              ?.copyWith(color: AppColors.inkSoft),
+                          description,
+                          style: text.bodySmall?.copyWith(
+                            color: AppColors.inkSoft,
+                          ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -466,27 +555,30 @@ class _MenuRow extends StatelessWidget {
                       const SizedBox(height: AppSpacing.sm),
                       Row(
                         children: [
-                          MoneyText(
-                            item.priceMinor,
-                            currency: item.currency,
-                            style: text.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primary,
+                          Expanded(
+                            child: MoneyText(
+                              item.priceMinor,
+                              currency: item.currency,
+                              overflow: TextOverflow.ellipsis,
+                              style: text.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primary,
+                              ),
                             ),
                           ),
-                          const Spacer(),
+                          const SizedBox(width: AppSpacing.sm),
                           if (available)
                             inCartQuantity == 0
                                 ? FilledButton(
                                     onPressed: onAdd,
                                     style: FilledButton.styleFrom(
-                                      minimumSize: const Size(84, 40),
+                                      minimumSize: const Size(76, 40),
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: AppSpacing.lg,
+                                        horizontal: AppSpacing.md,
                                       ),
                                       textStyle: const TextStyle(
                                         fontSize: 14,
-                                        fontWeight: FontWeight.w700,
+                                        fontWeight: FontWeight.w800,
                                       ),
                                     ),
                                     child: const Text('Add'),
@@ -511,6 +603,42 @@ class _MenuRow extends StatelessWidget {
   }
 }
 
+class _MenuFooter extends StatelessWidget {
+  const _MenuFooter({
+    required this.loadingMore,
+    required this.hasMore,
+    required this.onLoadMore,
+  });
+
+  final bool loadingMore;
+  final bool hasMore;
+  final Future<void> Function() onLoadMore;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loadingMore) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.4),
+          ),
+        ),
+      );
+    }
+    if (!hasMore) return const SizedBox.shrink();
+    return Center(
+      child: TextButton.icon(
+        onPressed: () => onLoadMore(),
+        icon: const Icon(Icons.expand_more_rounded),
+        label: const Text('Load more'),
+      ),
+    );
+  }
+}
+
 class _MenuHero extends StatelessWidget {
   const _MenuHero({required this.restaurant});
 
@@ -528,8 +656,7 @@ class _MenuHero extends StatelessWidget {
       return Image.asset(
         asset,
         fit: BoxFit.cover,
-        errorBuilder: (_, _, _) =>
-            _HeroInitials(name: restaurant.name),
+        errorBuilder: (_, _, _) => _HeroInitials(name: restaurant.name),
       );
     }
     return _HeroInitials(name: restaurant.name);

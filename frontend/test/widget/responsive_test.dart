@@ -111,11 +111,46 @@ void main() {
     // Signed-out landing page at phone width — must not overflow.
     await pumpApp(tester, backend, surfaceSize: _narrow);
     await tester.pump();
-    expect(find.text('Great food, from kitchens near you.'), findsOneWidget);
+    expect(
+      find.textContaining('Great food, from kitchens near you.'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull, reason: 'overflow on /welcome');
 
     await navTo(tester, '/login');
     expect(find.byType(TextFormField), findsNWidgets(2));
     expect(tester.takeException(), isNull, reason: 'overflow on /login');
+  });
+
+  testWidgets('every screen fits a 768px tablet without overflow', (
+    tester,
+  ) async {
+    final backend = TestBackend();
+    await backend.signIn();
+    await pumpApp(tester, backend, surfaceSize: const Size(768, 1024));
+    await tester.pump();
+
+    // Tablet keeps the bottom NavigationBar (>=900px is the rail) and the
+    // discovery grid widens to two columns — neither may overflow.
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(tester.takeException(), isNull, reason: 'overflow on /restaurants');
+
+    for (final route in [
+      '/menu/rest_bella_napoli',
+      '/menu/rest_bella_napoli/item/item_margherita_pizza',
+      '/cart',
+      '/orders',
+    ]) {
+      await navTo(tester, route);
+      await tester.pump();
+      expect(tester.takeException(), isNull, reason: 'overflow on $route');
+    }
+
+    backend.orders.detail = fixtureOrderDetail();
+    await navTo(tester, '/orders/order-1');
+    await tester.pump();
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'overflow on /orders/:id');
+    await unmountApp(tester);
   });
 }

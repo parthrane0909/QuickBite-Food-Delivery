@@ -25,6 +25,7 @@ class PaginatedListView<T> extends StatefulWidget {
     this.empty,
     this.separatorBuilder,
     this.gridDelegate,
+    this.header,
   });
 
   final List<T> items;
@@ -41,6 +42,10 @@ class PaginatedListView<T> extends StatefulWidget {
   /// When set, items render in a responsive grid (desktop/tablet layouts)
   /// instead of rows; the load-more footer spans the full width beneath it.
   final SliverGridDelegate? gridDelegate;
+
+  /// Optional widget scrolled ABOVE the items (hero band, section heading).
+  /// It shares the same scroll view, so it scrolls away with the content.
+  final Widget? header;
 
   @override
   State<PaginatedListView<T>> createState() => _PaginatedListViewState<T>();
@@ -84,56 +89,44 @@ class _PaginatedListViewState<T> extends State<PaginatedListView<T>> {
     if (items.isEmpty && widget.empty != null) {
       return RefreshIndicator(onRefresh: widget.onRefresh, child: widget.empty!);
     }
-    final count = items.length + (widget.hasMore || widget.loadingMore ? 1 : 0);
 
     final grid = widget.gridDelegate;
-    if (grid != null) {
-      return RefreshIndicator(
-        onRefresh: widget.onRefresh,
-        child: CustomScrollView(
-          controller: _controller,
-          slivers: [
-            SliverPadding(
-              padding: widget.padding,
-              sliver: SliverGrid(
-                gridDelegate: grid,
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) => widget.itemBuilder(context, index),
-                  childCount: items.length,
-                ),
-              ),
-            ),
-            if (widget.hasMore || widget.loadingMore)
-              SliverToBoxAdapter(
-                child: _Footer(
-                  loading: widget.loadingMore,
-                  hasMore: widget.hasMore,
-                  onRetry: widget.hasMore ? widget.onLoadMore : null,
-                ),
-              ),
-          ],
-        ),
-      );
-    }
+    final separator =
+        widget.separatorBuilder ??
+        (BuildContext _, int _) => const SizedBox(height: AppSpacing.cardGap);
 
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
-      child: ListView.separated(
+      child: CustomScrollView(
         controller: _controller,
-        padding: widget.padding,
-        itemCount: count,
-        separatorBuilder: widget.separatorBuilder ??
-            (_, _) => const SizedBox(height: AppSpacing.cardGap),
-        itemBuilder: (context, index) {
-          if (index >= items.length) {
-            return _Footer(
-              loading: widget.loadingMore,
-              hasMore: widget.hasMore,
-              onRetry: widget.hasMore ? widget.onLoadMore : null,
-            );
-          }
-          return widget.itemBuilder(context, index);
-        },
+        slivers: [
+          if (widget.header != null)
+            SliverToBoxAdapter(child: widget.header),
+          SliverPadding(
+            padding: widget.padding,
+            sliver: grid != null
+                ? SliverGrid(
+                    gridDelegate: grid,
+                    delegate: SliverChildBuilderDelegate(
+                      widget.itemBuilder,
+                      childCount: items.length,
+                    ),
+                  )
+                : SliverList.separated(
+                    itemCount: items.length,
+                    separatorBuilder: separator,
+                    itemBuilder: widget.itemBuilder,
+                  ),
+          ),
+          if (widget.hasMore || widget.loadingMore)
+            SliverToBoxAdapter(
+              child: _Footer(
+                loading: widget.loadingMore,
+                hasMore: widget.hasMore,
+                onRetry: widget.hasMore ? widget.onLoadMore : null,
+              ),
+            ),
+        ],
       ),
     );
   }

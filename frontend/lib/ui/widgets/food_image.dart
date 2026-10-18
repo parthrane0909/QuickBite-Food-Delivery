@@ -40,6 +40,7 @@ class FoodImage extends StatelessWidget {
     this.size = 64,
     this.rounded = true,
     this.roundedRadius = AppSpacing.radiusMd,
+    this.expand = false,
   });
 
   final String itemId;
@@ -48,20 +49,57 @@ class FoodImage extends StatelessWidget {
   final bool rounded;
   final double roundedRadius;
 
+  /// Fill the parent's box instead of a fixed [size] square (menu tiles).
+  final bool expand;
+
   @override
   Widget build(BuildContext context) {
     final asset = (assetName != null && assetName!.isNotEmpty && assetName!.startsWith('assets/'))
         ? assetName!
         : _dishAssets[stableHash(itemId) % _dishAssets.length];
+    final image = Image.asset(
+      asset,
+      width: expand ? null : size,
+      height: expand ? null : size,
+      fit: BoxFit.cover,
+      filterQuality: FilterQuality.medium,
+      errorBuilder: (_, _, _) => expand
+          ? _FallbackFill(seed: itemId)
+          : _FallbackTile(size: size, seed: itemId),
+    );
     return ClipRRect(
       borderRadius: BorderRadius.circular(rounded ? roundedRadius : AppSpacing.radiusPill),
-      child: Image.asset(
-        asset,
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        filterQuality: FilterQuality.medium,
-        errorBuilder: (_, _, _) => _FallbackTile(size: size, seed: itemId),
+      child: expand ? SizedBox.expand(child: image) : image,
+    );
+  }
+}
+
+/// Expanding fallback for tiles whose box is sized by the parent.
+class _FallbackFill extends StatelessWidget {
+  const _FallbackFill({required this.seed});
+
+  final String seed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primaryTint,
+            AppColors.peach,
+            AppColors.surfaceWarm,
+          ],
+          stops: const [0.0, 0.5, 1.0],
+          transform: _GradientRotation((stableHash(seed) % 360) * 3.14159 / 180),
+        ),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.restaurant_rounded,
+          color: AppColors.primary,
+          size: 32,
+        ),
       ),
     );
   }

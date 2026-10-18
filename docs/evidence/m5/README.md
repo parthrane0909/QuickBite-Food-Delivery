@@ -26,7 +26,7 @@ adb shell pm clear dev.quickbite.quickbite
 | `03_admin_access_control.txt` | Admin endpoints are admin-only | customer → 403 `FORBIDDEN`, anonymous → 401 (orders **and** summary) |
 | `04_cors.txt` | Explicit CORS | allow-origin echoed for `http://localhost:8080`; **no** header for `http://evil.example` |
 | `05_web_spa.txt` | Flutter web build served by nginx 1.30.6-alpine | `/`, deep link `/orders/order_probe`, unknown routes → 200 (SPA fallback); compiled API base URL present; bundle secret scan all 0; correct cache headers |
-| `06_flutter_tests.txt` | Frontend quality gates | `flutter analyze` → **No issues found!**; `flutter test` → **75 passed**; both integration suites noted |
+| `06_flutter_tests.txt` | Frontend quality gates | `flutter analyze` → **No issues found!**; `flutter test` → **75 passed** at the time of capture (the suite has since grown to **80** with the UI-refinement cases; the log is kept as the M5 snapshot); both integration suites noted |
 | `07_android_apk.txt` | Android build | `flutter build apk --debug` artifact + install/launch + scoped cleartext config |
 | `08_integration_flow.txt` | End-to-end customer journey on the emulator | **All tests passed!** (14s): sign-in → menu → cart → checkout (persisted key) → 202 → live 2s polling to terminal `DRIVER_ASSIGNED` → notifications → history |
 | `09_screenshot_tour.txt` | Android screenshot tour run | **All tests passed!** (15 framebuffer captures) |

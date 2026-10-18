@@ -204,11 +204,18 @@ void main() {
       await pumpApp(tester, backend, route: '/menu/rest_bella_napoli');
       await tester.pump();
 
+      // Image-led menu page: the first tile may sit below the fold, and once
+      // the floating cart bar appears the body shrinks again — scroll each
+      // control into the viewport before tapping (as a user would).
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Add'));
+      await tester.pump();
       await tester.tap(find.widgetWithText(FilledButton, 'Add'));
       await tester.pump();
       expect(find.textContaining('View cart'), findsOneWidget);
       expect(find.textContaining('1 item'), findsOneWidget);
 
+      await tester.ensureVisible(find.byIcon(Icons.add_rounded));
+      await tester.pump();
       await tester.tap(find.byIcon(Icons.add_rounded));
       await tester.pump();
       expect(find.textContaining('2 items'), findsOneWidget);
@@ -234,6 +241,8 @@ void main() {
       await tester.pump();
       await tester.pump();
 
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Add'));
+      await tester.pump();
       await tester.tap(find.widgetWithText(FilledButton, 'Add'));
       await tester.pump();
 

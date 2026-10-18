@@ -170,8 +170,11 @@ void main() {
 
     // Signed-out landing page (welcome) — sign-in still one tap away.
     // (The pitch can extend below the fold on short viewports — scroll it up.)
-    expect(find.text('Great food, from kitchens near you.'), findsOneWidget);
-    final signInButton = find.widgetWithText(FilledButton, 'Sign in');
+    expect(
+      find.textContaining('Great food, from kitchens near you.'),
+      findsOneWidget,
+    );
+    final signInButton = find.widgetWithText(FilledButton, 'Continue with email');
     await tester.ensureVisible(signInButton);
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(signInButton);

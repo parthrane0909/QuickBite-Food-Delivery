@@ -88,8 +88,15 @@ class AdminDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: AppSpacing.xl),
                 Text(
                   'Orders (all customers)',
-                  style: Theme.of(context).textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Read-only: tap an order to follow its real status.',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 SizedBox(
@@ -173,57 +180,104 @@ class _SummarySection extends StatelessWidget {
             Expanded(
               child: Text(
                 'Summary',
-                style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                style: text.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
               ),
             ),
-            Text(
-              'As of ${formatDateTime(summary.generatedAt)}',
-              style: text.labelSmall,
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceWarm,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                border: Border.all(color: AppColors.outlineSoft),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.visibility_outlined,
+                    size: 13,
+                    color: AppColors.inkSoft,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Read-only',
+                    style: text.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.inkSoft,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'As of ${formatDateTime(summary.generatedAt)}',
+          style: text.labelSmall,
+        ),
         const SizedBox(height: AppSpacing.md),
-        Wrap(
-          spacing: AppSpacing.md,
-          runSpacing: AppSpacing.md,
-          children: [
-            for (final status in OrderStatus.values)
-              _StatCard(
-                label: status.label,
-                value: '${summary.countFor(status)}',
-                tint: status.isFailure
-                    ? AppColors.dangerTint
-                    : status.isSuccess
-                    ? AppColors.successTint
-                    : AppColors.surfaceWarm,
-                valueColor: status.isFailure
-                    ? AppColors.danger
-                    : status.isSuccess
-                    ? AppColors.success
-                    : AppColors.ink,
-              ),
-            _StatCard(
-              label: 'Pending outbox events',
-              value: '${summary.pendingOutboxEvents}',
-              subtitle: 'not yet published',
-              tint: AppColors.infoTint,
-              valueColor: AppColors.info,
-            ),
-            _StatCard(
-              label: 'Retry backlog',
-              value: '${summary.retryBacklog}',
-              subtitle: 'scheduled retries',
-              tint: AppColors.warningTint,
-              valueColor: AppColors.warning,
-            ),
-            _StatCard(
-              label: 'Quarantine records',
-              value: '${summary.quarantineRecords}',
-              subtitle: 'failed deliveries',
-              tint: AppColors.dangerTint,
-              valueColor: AppColors.danger,
-            ),
-          ],
+        // Responsive stat grid: cards fill the row evenly (1–4 per row)
+        // instead of leaving a ragged fixed-width tail.
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const spacing = AppSpacing.md;
+            final columns = (constraints.maxWidth / 190).floor().clamp(1, 4);
+            final cardWidth =
+                (constraints.maxWidth - spacing * (columns - 1)) / columns;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: [
+                for (final status in OrderStatus.values)
+                  _StatCard(
+                    width: cardWidth,
+                    label: status.label,
+                    value: '${summary.countFor(status)}',
+                    tint: status.isFailure
+                        ? AppColors.dangerTint
+                        : status.isSuccess
+                        ? AppColors.successTint
+                        : AppColors.surfaceWarm,
+                    valueColor: status.isFailure
+                        ? AppColors.danger
+                        : status.isSuccess
+                        ? AppColors.success
+                        : AppColors.ink,
+                  ),
+                _StatCard(
+                  width: cardWidth,
+                  label: 'Pending outbox events',
+                  value: '${summary.pendingOutboxEvents}',
+                  subtitle: 'not yet published',
+                  tint: AppColors.infoTint,
+                  valueColor: AppColors.info,
+                ),
+                _StatCard(
+                  width: cardWidth,
+                  label: 'Retry backlog',
+                  value: '${summary.retryBacklog}',
+                  subtitle: 'scheduled retries',
+                  tint: AppColors.warningTint,
+                  valueColor: AppColors.warning,
+                ),
+                _StatCard(
+                  width: cardWidth,
+                  label: 'Quarantine records',
+                  value: '${summary.quarantineRecords}',
+                  subtitle: 'failed deliveries',
+                  tint: AppColors.dangerTint,
+                  valueColor: AppColors.danger,
+                ),
+              ],
+            );
+          },
         ),
         const SizedBox(height: AppSpacing.md),
         Text(
@@ -245,6 +299,7 @@ class _StatCard extends StatelessWidget {
     required this.tint,
     required this.valueColor,
     this.subtitle,
+    this.width = 168,
   });
 
   final String label;
@@ -252,12 +307,13 @@ class _StatCard extends StatelessWidget {
   final String? subtitle;
   final Color tint;
   final Color valueColor;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     return SizedBox(
-      width: 168,
+      width: width,
       child: Card(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),

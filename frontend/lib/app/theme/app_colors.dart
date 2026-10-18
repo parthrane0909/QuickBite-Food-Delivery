@@ -48,6 +48,14 @@ abstract final class AppColors {
   static const Color info = Color(0xFF1F6A8A); // confirmed/info text
   static const Color infoTint = Color(0xFFE3F1F7);
 
+  // Immersive brand red — full-bleed onboarding / sign-in backgrounds
+  // (reference-led: a vivid red field with a soft radial lift in the middle).
+  static const Color brandRed = Color(0xFFE2372A); // vivid red field
+  static const Color brandRedDeep = Color(0xFFB22318); // gradient mid
+  static const Color brandRedDark = Color(0xFF7C160D); // gradient end / status bar
+  static const Color onBrandRed = Color(0xFFFFFFFF);
+  static const Color onBrandRedSoft = Color(0xCCFFFFFF);
+
   // On-color text/icons
   static const Color onPrimary = Color(0xFFFFFFFF);
   static const Color onPrimarySoft = Color(0xFFFFE4DB);
@@ -67,6 +75,30 @@ abstract final class AppColors {
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
     colors: [Color(0x001C1411), Color(0x661C1411), Color(0xE61C1411)],
+    stops: [0.0, 0.55, 1.0],
+  );
+
+  /// Immersive brand-red field: deep red top -> vivid middle -> dark bottom.
+  static const LinearGradient brandRedGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [brandRedDark, brandRedDeep, brandRed, brandRedDeep],
+    stops: [0.0, 0.22, 0.62, 1.0],
+  );
+
+  /// Soft radial lift over [brandRedGradient] (the reference's centre glow).
+  static const RadialGradient brandRedGlow = RadialGradient(
+    center: Alignment(0, -0.25),
+    radius: 1.05,
+    colors: [Color(0x47FFFFFF), Color(0x14FFFFFF), Color(0x00FFFFFF)],
+    stops: [0.0, 0.45, 1.0],
+  );
+
+  /// Dark discovery band for the home header (photo + scrim friendly).
+  static const LinearGradient heroBand = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [charcoal, Color(0xFF3A2419), primaryDeep],
     stops: [0.0, 0.55, 1.0],
   );
 

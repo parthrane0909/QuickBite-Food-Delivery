@@ -29,14 +29,14 @@ void main() {
     app.main();
 
     // ---- 1. Sign in (real auth against the seeded demo account) ----------
-    // Signed-out visitors land on the welcome page first (new in the UI
-    // rehaul); "Sign in" leads to the login form.
+    // Signed-out visitors land on the welcome page first (UI rehaul);
+    // "Continue with email" leads to the login form.
     await _waitFor(
       tester,
-      find.text('Great food, from kitchens near you.'),
+      find.textContaining('Great food, from kitchens near you.'),
       label: 'welcome screen',
     );
-    final welcomeSignIn = find.widgetWithText(FilledButton, 'Sign in');
+    final welcomeSignIn = find.widgetWithText(FilledButton, 'Continue with email');
     await _scrollIntoView(tester, welcomeSignIn);
     await tester.tap(welcomeSignIn);
 

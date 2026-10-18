@@ -41,7 +41,10 @@ served through the API's `image_asset` field.
   the table above and `CREDITS.json` record author, license and file
   page per image. ShareAlike applies to the images themselves, not to
   the application code.
-- **Unsplash License**: free to use; attribution appreciated.
+- **CC0 / Public domain**: no conditions; credited above anyway.
+
+All 28 files in this directory are covered by the table above (no other
+sources are bundled).
 
 Replace any photo by editing `scripts/food_photo_overrides.json` and
 re-running `python3 scripts/fetch_food_photos.py --only <entity-id>`.

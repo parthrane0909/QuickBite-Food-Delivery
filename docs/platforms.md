@@ -13,9 +13,11 @@ machine.
 | Android (emulator) | ✅ `flutter build apk --debug` | ✅ integration flow on AVD `quickbite` (API 36, x86_64) | `docs/evidence/m5/` |
 | iOS (simulator/device) | ⛔ **pending — no macOS/Xcode on this Linux host** | ⛔ pending | Build plan below |
 
-iOS is **not** claimed complete. The project files (`frontend/ios/`) are the
-Flutter-generated scaffolding; they compile only on macOS with Xcode. The
-procedure below is the documented plan for a Mac or hosted macOS runner.
+iOS is **not** claimed complete. The `frontend/ios/` platform directory has
+**not** been generated in this repository (the platform tooling requires macOS
+with Xcode, which this Linux host does not have — the folder is absent, not
+merely unbuilt). The procedure below is the documented plan for a Mac or
+hosted macOS runner; `flutter create --platforms=ios .` is the first step.
 
 ## Clean-install sequence (any platform)
 

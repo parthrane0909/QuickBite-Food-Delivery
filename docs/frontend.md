@@ -13,7 +13,7 @@ frontend/lib/
   app/
     app.dart              QuickBiteApp (theme, router)
     router.dart           GoRouter 18: role-aware redirects, auth guard
-    theme/                palette (coral/cream/peach), Playfair Display + Roboto
+    theme/                palette (coral/cream/peach), Inter (UI) + Playfair Display (wordmark)
   core/
     config/app_config.dart    API_BASE_URL (--dart-define, no secrets)
     network/                  ApiClient (native http), ApiException envelope
@@ -23,13 +23,16 @@ frontend/lib/
                           checkout, orders, admin, shell)
   ui/widgets/             shared widgets (buttons, banners, empty/error states,
                           money text, status chips, paginated list)
+  ui/motion/              Entrance (staggered fade+slide), Shimmer skeletons,
+                          LivePulse — all no-ops under reduced motion
 ```
 
-Design reference: the coral/cream Dribbble shot and the three supplied
-food-delivery screenshots — palette in `app_colors.dart`, pill buttons,
-rounded cards, serif display type. All food imagery is generated locally by
-`scripts/generate_food_images.py` (no licensed assets); the bundled
-Playfair Display font is OFL-licensed (`assets/fonts/OFL.txt`).
+Design reference: the three supplied food-delivery screenshots and the
+coral/cream direction — palette in `app_colors.dart`, pill controls, rounded
+cards, oversized display type. Food photography is 28 licensed, attributed
+CC0/PD/CC-BY photos in `assets/food/` (see `docs/design-assets.md`); the
+bundled **Inter** (OFL) and **Playfair Display** (OFL) fonts ship with their
+license files in `assets/fonts/`.
 
 ## State management (Riverpod 3)
 
@@ -131,14 +134,15 @@ status.
 
 ## Tests
 
-- `test/widget/` — 75 widget tests over the REAL app (router, theme,
+- `test/widget/` — 80 widget tests over the REAL app (router, theme,
   controllers) with fake repositories at the data boundary: login
   validation/errors, catalog, cart (1..20 clamp, single-restaurant lock,
   clear-confirmation), checkout idempotency (same-key retry, 409, 401,
   discard flow), tracking (2 s cadence, terminal stop, backoff, manual
   refresh, notifications, failure reason), history filters, admin
   dashboard (summary counts, cross-customer rows, filter, 403 error
-  state), responsive/a11y checks.
+  state), responsive checks at 360px / 768px / 1200px, welcome and login
+  copy/landing checks.
 - `test/data/dto_contract_test.dart` — JSON ⇄ DTO contract pinned to the
   server field sets (money as integer minor units, unknown status →
   `FormatException`).

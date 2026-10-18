@@ -1,10 +1,11 @@
-/// Restaurant card (UI rehaul v2): full-bleed photography on a raised white
-/// card — image on top, name, one-line description, availability pill,
-/// "View menu" affordance. Shows ONLY API-backed fields — no ratings,
-/// delivery times or fees are invented (the contract has none).
+/// Restaurant card (UI rehaul v3): full-bleed photography on a raised white
+/// card — image on top with the real open/closed state, then name, one-line
+/// description and a "View menu" affordance. Shows ONLY API-backed fields —
+/// no ratings, delivery times, fees or offers are invented (the contract has
+/// none).
 ///
 /// Layout: the photo fills all vertical space the card is given (fixed
-/// 148px in lists; taller in responsive grid cells), content sits in a
+/// 156px in lists; taller in responsive grid cells), content sits in a
 /// fixed block beneath — so one component works at every breakpoint without
 /// clipping. Interaction comes from the shared [Pressable] (press scale,
 /// web hover lift); the whole card is one semantic button with the
@@ -32,9 +33,9 @@ class RestaurantCard extends StatelessWidget {
   /// size the card, the photo expands to fill).
   final double? height;
 
-  /// Fixed list height: 148 photo + content block.
-  static const double totalHeight = 264;
-  static const double heroHeight = 148;
+  /// Fixed list height: 156 photo + content block.
+  static const double totalHeight = 272;
+  static const double heroHeight = 156;
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +45,8 @@ class RestaurantCard extends StatelessWidget {
       onTap: onTap,
       child: Semantics(
         button: true,
-        label: '${restaurant.name} restaurant'
+        label:
+            '${restaurant.name} restaurant'
             '${restaurant.isAvailable ? ', open' : ', currently closed'}',
         child: Container(
           height: height,
@@ -75,8 +77,9 @@ class RestaurantCard extends StatelessWidget {
                     Positioned(
                       top: AppSpacing.sm,
                       right: AppSpacing.sm,
-                      child:
-                          _AvailabilityChip(available: restaurant.isAvailable),
+                      child: _AvailabilityChip(
+                        available: restaurant.isAvailable,
+                      ),
                     ),
                   ],
                 ),
@@ -84,9 +87,9 @@ class RestaurantCard extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.lg,
-                  AppSpacing.md - 2,
+                  AppSpacing.md,
                   AppSpacing.lg,
-                  AppSpacing.sm,
+                  AppSpacing.md,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -94,7 +97,8 @@ class RestaurantCard extends StatelessWidget {
                     Text(
                       restaurant.name,
                       style: text.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -103,26 +107,28 @@ class RestaurantCard extends StatelessWidget {
                       const SizedBox(height: 3),
                       Text(
                         description,
-                        style:
-                            text.bodySmall?.copyWith(color: AppColors.inkSoft),
+                        style: text.bodySmall?.copyWith(
+                          color: AppColors.inkSoft,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
-                    const SizedBox(height: AppSpacing.xs + 2),
+                    const SizedBox(height: AppSpacing.sm),
                     Row(
                       children: [
-                        Text(
-                          'View menu',
-                          style: text.labelMedium?.copyWith(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w700,
+                        Expanded(
+                          child: Text(
+                            'View menu',
+                            style: text.labelMedium?.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 4),
                         const Icon(
                           Icons.arrow_forward_rounded,
-                          size: 14,
+                          size: 15,
                           color: AppColors.primary,
                         ),
                       ],

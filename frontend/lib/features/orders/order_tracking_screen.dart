@@ -24,6 +24,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../core/utils/datetime.dart';
+import '../../data/dto/notification_dto.dart';
+import '../../domain/order_status.dart';
 import '../../state/auth_controller.dart';
 import '../../state/orders_providers.dart';
 import '../../ui/motion/entrance.dart';
@@ -358,6 +360,8 @@ class _StatusCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: AppSpacing.md),
+            _ProgressTrack(status: order.status),
+            const SizedBox(height: AppSpacing.md),
             if (order.status.isSuccess)
               const AppBanner(
                 kind: AppBannerKind.success,
@@ -395,6 +399,150 @@ class _StatusCard extends StatelessWidget {
 }
 
 // ------------------------------ timeline ----------------------------------
+
+/// Compact horizontal progress track mirroring the REAL state machine
+/// (PENDING → PAID → CONFIRMED → DRIVER_ASSIGNED). Failure terminals stop the
+/// track at the stage that failed; no step is ever invented (the contract has
+/// no DELIVERED state and no GPS tracking).
+class _ProgressTrack extends StatelessWidget {
+  const _ProgressTrack({required this.status});
+
+  final OrderStatus status;
+
+  static const List<(String, String)> _steps = [
+    ('Placed', 'PENDING'),
+    ('Paid', 'PAID'),
+    ('Confirmed', 'CONFIRMED'),
+    ('Driver', 'DRIVER_ASSIGNED'),
+  ];
+
+  int get _current => switch (status) {
+    OrderStatus.pending => 0,
+    OrderStatus.paid => 1,
+    OrderStatus.confirmed => 2,
+    OrderStatus.driverAssigned => 3,
+    // Failures report the stage that failed: payment, or confirmation.
+    OrderStatus.paymentFailed => 1,
+    OrderStatus.failed => 2,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final failed = status.isFailure;
+    final current = _current;
+    final accent = failed ? AppColors.danger : AppColors.primary;
+
+    return Semantics(
+      container: true,
+      label:
+          'Order progress: ${_steps[current].$1} of ${_steps.length}'
+          '${failed ? ', failed' : ''}',
+      child: ExcludeSemantics(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < _steps.length; i++)
+              Expanded(
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 3,
+                            color: i > 0 && i <= current
+                                ? accent
+                                : AppColors.outlineSoft,
+                          ),
+                        ),
+                        _Dot(
+                          reached: i < current || (i == current && failed),
+                          current: i == current && !failed,
+                          failed: failed && i == current,
+                          upcoming: i > current,
+                        ),
+                        Expanded(
+                          child: Container(
+                            height: 3,
+                            color: i < current
+                                ? accent
+                                : AppColors.outlineSoft,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _steps[i].$1,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: text.labelSmall?.copyWith(
+                        fontSize: 10.5,
+                        fontWeight: i == current
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                        color: i == current
+                            ? accent
+                            : (i < current ? AppColors.ink : AppColors.inkFaint),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Dot extends StatelessWidget {
+  const _Dot({
+    required this.reached,
+    required this.current,
+    required this.failed,
+    required this.upcoming,
+  });
+
+  final bool reached;
+  final bool current;
+  final bool failed;
+  final bool upcoming;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = failed
+        ? AppColors.danger
+        : (upcoming ? AppColors.outlineSoft : AppColors.primary);
+    final size = current || failed ? 22.0 : 18.0;
+    return SizedBox(
+      width: 22,
+      height: 22,
+      child: Center(
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: (reached || failed || current)
+                ? color
+                : AppColors.surface,
+            shape: BoxShape.circle,
+            border: Border.all(color: color, width: 2),
+          ),
+          child: (reached || failed || current)
+              ? Icon(
+                  failed ? Icons.close_rounded : Icons.check_rounded,
+                  size: 12,
+                  color: AppColors.onPrimary,
+                )
+              : null,
+        ),
+      ),
+    );
+  }
+}
 
 class _TimelineCard extends StatelessWidget {
   const _TimelineCard({required this.watch});
@@ -576,10 +724,56 @@ class _DetailsCard extends StatelessWidget {
             const SizedBox(height: 2),
             Text(formatDateTime(order.createdAt), style: text.bodyMedium),
             if (order.driverId != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              Text('Driver', style: text.labelMedium),
-              const SizedBox(height: 2),
-              Text(order.driverId!, style: text.bodyMedium),
+              const SizedBox(height: AppSpacing.lg),
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryTint,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: const BoxDecoration(
+                        color: AppColors.surface,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.two_wheeler_rounded,
+                        size: 20,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Your driver',
+                            style: text.labelMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            order.driverId!,
+                            style: text.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
             if (order.failureReason != null) ...[
               const SizedBox(height: AppSpacing.md),
@@ -644,56 +838,26 @@ class _NotificationsCard extends StatelessWidget {
                 style: text.bodySmall,
               )
             else
-              for (final entry in feed.items)
+              for (var i = 0; i < feed.items.length; i++)
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: entry.isFailure
-                              ? AppColors.dangerTint
-                              : AppColors.primaryTint,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _notificationIcon(entry.type),
-                          size: 17,
-                          color: entry.isFailure
-                              ? AppColors.danger
-                              : AppColors.primary,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(entry.message, style: text.bodyMedium),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${_typeLabel(entry.type)} · ${formatRelative(entry.createdAt)}',
-                              style: text.labelSmall,
+                  child: Container(
+                    padding: i == 0
+                        ? const EdgeInsets.all(AppSpacing.sm)
+                        : EdgeInsets.zero,
+                    decoration: i == 0
+                        ? BoxDecoration(
+                            color: AppColors.surfaceWarm,
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.radiusMd,
                             ),
-                            if (entry.type == 'notification.failed') ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                'Notification delivery failed — your ORDER is '
-                                'unaffected.',
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.info,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
+                            border: Border.all(color: AppColors.outlineSoft),
+                          )
+                        : null,
+                    child: _NotificationRow(
+                      entry: feed.items[i],
+                      latest: i == 0,
+                    ),
                   ),
                 ),
             if (feed != null && feed.hasMore)
@@ -709,6 +873,97 @@ class _NotificationsCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// One persisted notification. The newest entry is visually emphasised
+/// (tinted card + "Latest" tag) so the most recent server event reads first.
+class _NotificationRow extends StatelessWidget {
+  const _NotificationRow({required this.entry, required this.latest});
+
+  final NotificationEntry entry;
+  final bool latest;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: entry.isFailure
+                ? AppColors.dangerTint
+                : AppColors.primaryTint,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            _notificationIcon(entry.type),
+            size: 17,
+            color: entry.isFailure ? AppColors.danger : AppColors.primary,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(entry.message, style: text.bodyMedium),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      '${_typeLabel(entry.type)} · ${formatRelative(entry.createdAt)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.labelSmall,
+                    ),
+                  ),
+                  if (latest) ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusPill,
+                        ),
+                      ),
+                      child: const Text(
+                        'Latest',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.onPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              if (entry.type == 'notification.failed') ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Notification delivery failed — your ORDER is '
+                  'unaffected.',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.info,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
