@@ -91,6 +91,7 @@ claim live GPS coordinates.
 | Android debug build and emulator run | Passed; authenticated read-only customer/admin tour (`android-runtime.txt`) |
 | Flutter web release build | Passed for port 8000 and for the current port-8001 source API (`flutter-web-build-final.txt`, `flutter-web-build-runtime.txt`) |
 | Web HTTP paths | `/`, `/welcome`, `/login`, `/restaurants`, `/admin` return nginx SPA HTML (`http-routes-final.txt`) |
+| Chrome mobile-web authentication | Passed: seeded customer sign-in reached live discovery at 393×852 (`web-interactive-smoke.txt`) |
 | Source API search/categories | Ready; 16 cuisine values, dish-name and combined cuisine/search requests return 200 (`http-routes-final.txt`) |
 | Android release APK | Not built; Gradle fails on Flutter SDK `integration_test` generated plugin registration (`android-release-build.txt`) |
 
@@ -120,12 +121,12 @@ measurements, not production capacity claims.
 ## Runtime and remaining limitations
 
 The latest release web files are served by the project nginx container. Chrome
-CDP captured the current welcome and login screens. Full interactive web
-authentication was not verified: Python Playwright is unavailable, and the
-earlier browser-flow attempt failed to enter the password. The Android real-API
-journey and Flutter responsive widget tests passed. The web bundle used for the
-current capture points to host API port 8001; the normal port-8000-targeted web
-release also compiled successfully.
+CDP captured the current welcome and login screens, then drove a real demo
+sign-in to restaurant discovery and captured that page. The full menu-to-
+checkout browser journey remains unverified because Python Playwright is not
+installed. The Android real-API journey and Flutter responsive widget tests
+passed. The web bundle used for the current capture points to host API port
+8001; the normal port-8000-targeted web release also compiled successfully.
 
 `docker compose build api` was attempted after the suite passed but failed while
 resolving the Dockerfile frontend because `auth.docker.io` DNS timed out. The

@@ -89,12 +89,7 @@ def main() -> None:
     android_images = sorted(
         path for path in ANDROID.glob("*.png") if not path.stem.startswith("diagnostic_")
     )
-    # 393_discovery.png came from an earlier failed Playwright attempt and
-    # actually shows the login error state. Keep it on disk for provenance,
-    # but don't present it as a successful discovery capture.
-    web_images = sorted(
-        path for path in WEB.glob("*.png") if path.stem != "393_discovery"
-    )
+    web_images = sorted(WEB.glob("*.png"))
     logs = sorted(
         path
         for path in EVIDENCE.glob("*")
@@ -129,7 +124,7 @@ figcaption{font-size:13px;color:#50545a;padding-top:8px}
 <p>Real API login, searchable 2,000-restaurant catalogue, restaurant menu, dish detail, cart, checkout route, order history route, sign-out.</p></section>
 """
     content += image_section("Captured Android screens", android_images)
-    content += '<section id="web"><h2>Flutter web · nginx and Chrome</h2><p>The release bundle was served through project nginx. Chrome CDP captured current welcome/login screens; SPA route checks are recorded in the logs. The authenticated browser journey could not be completed here because Playwright is not installed. Android covers the full authenticated journey.</p></section>'
+    content += '<section id="web"><h2>Flutter web · nginx and Chrome</h2><p>The current release bundle was served through project nginx. Chrome CDP verified real demo sign-in and loaded the live restaurant discovery screen; SPA route checks are recorded in the logs. Full menu-to-checkout browser automation remains unverified. Android covers the broader authenticated journey.</p></section>'
     content += image_section("Captured web screens", web_images)
     content += (
         '<section id="tests"><h2>Test logs and reports</h2><p><a href="REPORT.md">Final implementation and verification report</a> · <a href="FILES.md">Changed-file manifest</a></p><ul>' + links + "</ul>"

@@ -232,4 +232,5 @@ This manifest covers the implementation and review artifacts in the finalization
 | `scripts/fetch_food_photos.py` | Image processing and final visual/runtime evidence tools |
 | `scripts/food_photo_overrides.json` | Image processing and final visual/runtime evidence tools |
 | `scripts/inspect_web_runtime.py` | Image processing and final visual/runtime evidence tools |
+| `docs/evidence/final/web-interactive-smoke.txt` | Chrome CDP demo login and live discovery verification. |
 | `docs/evidence/final/FILES.md` | This changed-file manifest. |
