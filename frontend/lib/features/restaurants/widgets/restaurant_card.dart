@@ -1,86 +1,186 @@
-/// Restaurant card from the reference design: avatar, name, one-line
-/// description, availability chip, chevron. Shows ONLY API-backed fields —
-/// no ratings, delivery times or fees are invented (the contract has none).
+/// Restaurant card (UI rehaul v2): full-bleed photography on a raised white
+/// card — image on top, name, one-line description, availability pill,
+/// "View menu" affordance. Shows ONLY API-backed fields — no ratings,
+/// delivery times or fees are invented (the contract has none).
+///
+/// Layout: the photo fills all vertical space the card is given (fixed
+/// 148px in lists; taller in responsive grid cells), content sits in a
+/// fixed block beneath — so one component works at every breakpoint without
+/// clipping. Interaction comes from the shared [Pressable] (press scale,
+/// web hover lift); the whole card is one semantic button with the
+/// open/closed state in its accessible label.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../data/dto/catalog_dto.dart';
-import '../../../ui/widgets/food_image.dart';
+import '../../../ui/widgets/pressable.dart';
 
 class RestaurantCard extends StatelessWidget {
-  const RestaurantCard({super.key, required this.restaurant, required this.onTap});
+  const RestaurantCard({
+    super.key,
+    required this.restaurant,
+    required this.onTap,
+    this.height = totalHeight,
+  });
 
   final Restaurant restaurant;
   final VoidCallback onTap;
 
+  /// List-mode height; pass `null` inside grid cells (tight constraints
+  /// size the card, the photo expands to fill).
+  final double? height;
+
+  /// Fixed list height: 148 photo + content block.
+  static const double totalHeight = 264;
+  static const double heroHeight = 148;
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return Semantics(
-      button: true,
-      label: '${restaurant.name} restaurant'
-          '${restaurant.isAvailable ? ', open' : ', currently closed'}',
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                RestaurantAvatar(name: restaurant.name, size: 62),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              restaurant.name,
-                              style: text.titleMedium,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          _AvailabilityChip(available: restaurant.isAvailable),
-                        ],
-                      ),
-                      if (restaurant.description != null &&
-                          restaurant.description!.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          restaurant.description!,
-                          style: text.bodySmall,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+    final description = restaurant.description;
+    return Pressable(
+      onTap: onTap,
+      child: Semantics(
+        button: true,
+        label: '${restaurant.name} restaurant'
+            '${restaurant.isAvailable ? ', open' : ', currently closed'}',
+        child: Container(
+          height: height,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            boxShadow: AppShadow.card,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _HeroImage(restaurant: restaurant),
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0x331C1411), Color(0x001C1411)],
+                          stops: [0.0, 0.45],
                         ),
-                      ],
-                      const SizedBox(height: AppSpacing.sm),
-                      Row(
-                        children: [
-                          Text(
-                            'View menu',
-                            style: text.labelMedium?.copyWith(color: AppColors.primary),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.arrow_forward_rounded,
-                            size: 14,
-                            color: AppColors.primary,
-                          ),
-                        ],
+                      ),
+                    ),
+                    Positioned(
+                      top: AppSpacing.sm,
+                      right: AppSpacing.sm,
+                      child:
+                          _AvailabilityChip(available: restaurant.isAvailable),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.md - 2,
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      restaurant.name,
+                      style: text.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (description != null && description.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        description,
+                        style:
+                            text.bodySmall?.copyWith(color: AppColors.inkSoft),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
-                  ),
+                    const SizedBox(height: AppSpacing.xs + 2),
+                    Row(
+                      children: [
+                        Text(
+                          'View menu',
+                          style: text.labelMedium?.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 14,
+                          color: AppColors.primary,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroImage extends StatelessWidget {
+  const _HeroImage({required this.restaurant});
+
+  final Restaurant restaurant;
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = restaurant.imageAsset;
+    if (asset != null && asset.isNotEmpty) {
+      return Image.asset(
+        asset,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _InitialsFallback(restaurant: restaurant),
+      );
+    }
+    return _InitialsFallback(restaurant: restaurant);
+  }
+}
+
+class _InitialsFallback extends StatelessWidget {
+  const _InitialsFallback({required this.restaurant});
+
+  final Restaurant restaurant;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = restaurant.name;
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return Container(
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.primaryTint, AppColors.surfaceWarm],
+        ),
+      ),
+      child: Text(
+        initial,
+        style: const TextStyle(
+          fontSize: 44,
+          fontWeight: FontWeight.w800,
+          color: AppColors.primary,
         ),
       ),
     );
@@ -94,30 +194,33 @@ class _AvailabilityChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = available ? AppColors.success : AppColors.inkSoft;
-    final background = available ? AppColors.successTint : AppColors.surfaceWarm;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 3),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: 5,
+      ),
       decoration: BoxDecoration(
-        color: background,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        boxShadow: AppShadow.card,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            available ? Icons.store_mall_directory_outlined : Icons.hourglass_empty_rounded,
-            size: 12,
-            color: color,
+            available
+                ? Icons.store_mall_directory_outlined
+                : Icons.hourglass_empty_rounded,
+            size: 13,
+            color: available ? AppColors.success : AppColors.inkSoft,
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 5),
           Text(
             available ? 'Open' : 'Closed',
             style: TextStyle(
-              fontSize: 11.5,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: color,
+              color: available ? AppColors.success : AppColors.inkSoft,
             ),
           ),
         ],

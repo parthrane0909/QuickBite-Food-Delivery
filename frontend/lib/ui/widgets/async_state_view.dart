@@ -15,15 +15,23 @@ class LoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const CircularProgressIndicator(),
+            const SizedBox(
+              width: 30,
+              height: 30,
+              child: CircularProgressIndicator(strokeWidth: 3),
+            ),
             const SizedBox(height: AppSpacing.lg),
-            Text(label, style: Theme.of(context).textTheme.bodyMedium),
+            Text(
+              label,
+              style: text.bodyMedium?.copyWith(color: AppColors.inkSoft),
+            ),
           ],
         ),
       ),
@@ -68,7 +76,7 @@ class EmptyState extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             Text(
               title,
-              style: text.titleMedium,
+              style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               textAlign: TextAlign.center,
             ),
             if (message != null) ...[

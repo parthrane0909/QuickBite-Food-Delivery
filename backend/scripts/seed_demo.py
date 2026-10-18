@@ -273,6 +273,17 @@ SEED_RESTAURANTS: list[dict[str, Any]] = [
 ]
 
 
+def _image_asset(entity_id: str) -> str:
+    """Bundled food photograph for a catalog entity (frontend asset path).
+
+    The UI-rehaul image set lives in frontend/assets/food/<entity_id>.jpg and
+    is delivered through the EXISTING nullable image_asset contract field —
+    no schema or endpoint change. See frontend/assets/food/CREDITS.md for
+    per-photo source and license.
+    """
+    return f"assets/food/{entity_id}.jpg"
+
+
 async def seed_all(session: AsyncSession, *, reset_passwords: bool = False) -> dict[str, int]:
     counts = {"users_created": 0, "users_updated": 0, "restaurants": 0, "menu_items": 0}
 
@@ -309,12 +320,14 @@ async def seed_all(session: AsyncSession, *, reset_passwords: bool = False) -> d
                 description=restaurant_data["description"],
                 currency="INR",
                 is_available=True,
+                image_asset=_image_asset(restaurant_data["id"]),
             )
             session.add(restaurant)
         else:
             restaurant.name = restaurant_data["name"]
             restaurant.description = restaurant_data["description"]
             restaurant.is_available = True
+            restaurant.image_asset = _image_asset(restaurant_data["id"])
         counts["restaurants"] += 1
         await session.flush()
 
@@ -333,6 +346,7 @@ async def seed_all(session: AsyncSession, *, reset_passwords: bool = False) -> d
                         currency="INR",
                         is_available=available,
                         sort_order=sort_order,
+                        image_asset=_image_asset(item_id),
                     )
                 )
             else:
@@ -341,6 +355,7 @@ async def seed_all(session: AsyncSession, *, reset_passwords: bool = False) -> d
                 item.price_amount_minor = price_minor
                 item.is_available = available
                 item.sort_order = sort_order
+                item.image_asset = _image_asset(item_id)
             counts["menu_items"] += 1
 
     await session.flush()

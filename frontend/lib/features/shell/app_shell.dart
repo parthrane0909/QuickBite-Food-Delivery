@@ -2,7 +2,7 @@
 /// NavigationBar on phones — the SAME information architecture at every
 /// size (assignment §8). Destinations are ROLE-AWARE:
 ///
-///   customer: Restaurants, Orders
+///   customer: Home (discovery), Orders, Account
 ///   admin:    Admin overview (customer-only list actions are hidden)
 ///
 /// Detail screens (menu/cart/checkout/tracking) are pushed on top of this
@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme.dart' show AppTypography;
 import '../../state/auth_controller.dart';
 
 class AppShell extends ConsumerWidget {
@@ -42,12 +43,25 @@ class AppShell extends ConsumerWidget {
                 extended: constraints.maxWidth >= 1280,
                 minExtendedWidth: 200,
                 backgroundColor: AppColors.surface,
-                leading: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                  child: CircleAvatar(
-                    radius: 20,
-                    backgroundColor: AppColors.primaryTint,
-                    backgroundImage: AssetImage('assets/images/logo_mark.png'),
+                leading: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircleAvatar(
+                        radius: 20,
+                        backgroundColor: AppColors.primaryTint,
+                        backgroundImage:
+                            AssetImage('assets/images/logo_mark.png'),
+                      ),
+                      if (constraints.maxWidth >= 1280) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          'QuickBite',
+                          style: AppTypography.wordmark(size: 15),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 trailing: Padding(
@@ -88,14 +102,19 @@ class AppShell extends ConsumerWidget {
         ]
       : const [
           NavigationDestination(
-            selectedIcon: Icon(Icons.restaurant_rounded),
-            icon: Icon(Icons.restaurant_outlined),
-            label: 'Restaurants',
+            selectedIcon: Icon(Icons.home_rounded),
+            icon: Icon(Icons.home_outlined),
+            label: 'Home',
           ),
           NavigationDestination(
             selectedIcon: Icon(Icons.receipt_long_rounded),
             icon: Icon(Icons.receipt_long_outlined),
             label: 'Orders',
+          ),
+          NavigationDestination(
+            selectedIcon: Icon(Icons.person_rounded),
+            icon: Icon(Icons.person_outline_rounded),
+            label: 'Account',
           ),
         ];
 
@@ -113,13 +132,58 @@ class AppShell extends ConsumerWidget {
 
   /// Destination index (role-relative) for the current shell branch.
   int _indexForShell({required bool isAdmin}) {
-    if (isAdmin) return shell.currentIndex == 2 ? 0 : 0;
-    return shell.currentIndex.clamp(0, 1);
+    if (isAdmin) return 0;
+    return switch (shell.currentIndex) {
+      1 => 1, // Orders
+      3 => 2, // Account
+      _ => 0, // Home
+    };
   }
 
+  /// Shell branch for a tapped destination.
+  ///
+  /// Branch table: 0 = /restaurants (Home), 1 = /orders, 2 = /admin,
+  /// 3 = /account. Admin maps every destination to its single branch.
   int _branchFor(int destinationIndex, {required bool isAdmin}) {
     if (isAdmin) return 2;
-    return destinationIndex; // customer branches are 0 and 1
+    return switch (destinationIndex) {
+      0 => 0,
+      1 => 1,
+      _ => 3,
+    };
+  }
+}
+
+/// Shared sign-out confirmation — used by the rail's [LogoutButton] and the
+/// Account screen so the destructive action always asks first.
+Future<void> confirmSignOut(BuildContext context, WidgetRef ref) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Sign out?'),
+      content: const Text('You will need to sign in again to browse QuickBite.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          style: FilledButton.styleFrom(minimumSize: const Size(120, 44)),
+          child: const Text('Sign out'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed ?? false) {
+    if (!context.mounted) return;
+    // Route redirect reacts to the auth change (a protected path would land
+    // on /login?next=…); an EXPLICIT sign-out should end on the signed-out
+    // landing page instead — token-expiry 401s still land on the login
+    // banner by design.
+    await ref.read(authControllerProvider.notifier).signOut();
+    if (!context.mounted) return;
+    context.go('/welcome');
   }
 }
 
@@ -136,39 +200,13 @@ class LogoutButton extends ConsumerWidget {
       return IconButton(
         tooltip: label,
         icon: const Icon(Icons.logout_rounded),
-        onPressed: () => _signOut(context, ref),
+        onPressed: () => confirmSignOut(context, ref),
       );
     }
     return TextButton.icon(
       icon: const Icon(Icons.logout_rounded, size: 18),
       label: Text(label),
-      onPressed: () => _signOut(context, ref),
+      onPressed: () => confirmSignOut(context, ref),
     );
-  }
-
-  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Sign out?'),
-        content: const Text('You will need to sign in again to browse QuickBite.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: FilledButton.styleFrom(minimumSize: const Size(120, 44)),
-            child: const Text('Sign out'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed ?? false) {
-      if (!context.mounted) return;
-      // Route redirect sends the user to /login once auth clears.
-      await ref.read(authControllerProvider.notifier).signOut();
-    }
   }
 }

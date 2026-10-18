@@ -20,8 +20,11 @@ import '../../core/utils/datetime.dart';
 import '../../data/dto/admin_dto.dart';
 import '../../domain/order_status.dart';
 import '../../state/admin_providers.dart';
+import '../../ui/motion/entrance.dart';
+import '../../ui/motion/shimmer.dart';
 import '../../ui/widgets/async_state_view.dart';
 import '../../ui/widgets/money_text.dart';
+import '../../ui/widgets/pressable.dart';
 import '../../ui/widgets/status_chip.dart';
 import '../shell/app_shell.dart';
 
@@ -58,13 +61,16 @@ class AdminDashboardScreen extends ConsumerWidget {
             },
             icon: const Icon(Icons.refresh_rounded),
           ),
-          if (narrow) LogoutButton(iconOnly: MediaQuery.sizeOf(context).width < 480),
+          if (narrow)
+            LogoutButton(iconOnly: MediaQuery.sizeOf(context).width < 480),
           const SizedBox(width: AppSpacing.sm),
         ],
       ),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: AppSpacing.desktopMaxWidth),
+          constraints: const BoxConstraints(
+            maxWidth: AppSpacing.desktopMaxWidth,
+          ),
           child: RefreshIndicator(
             onRefresh: () async {
               await Future.wait([
@@ -75,16 +81,24 @@ class AdminDashboardScreen extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.all(AppSpacing.screenPadding),
               children: [
-                _SummarySection(state: summary, onRetry: summaryController.refresh),
+                _SummarySection(
+                  state: summary,
+                  onRetry: summaryController.refresh,
+                ),
                 const SizedBox(height: AppSpacing.xl),
-                Text('Orders (all customers)', style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  'Orders (all customers)',
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: AppSpacing.md),
                 SizedBox(
                   height: 44,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: _filters.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(width: AppSpacing.sm),
                     itemBuilder: (context, index) {
                       final filter = _filters[index];
                       final selected = orders.filter == filter;
@@ -95,7 +109,9 @@ class AdminDashboardScreen extends ConsumerWidget {
                         labelStyle: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: selected ? AppColors.primary : AppColors.ink,
+                          // White on the coral selection pill (chipTheme's
+                          // selectedColor) — coral-on-coral was invisible.
+                          color: selected ? AppColors.onPrimary : AppColors.ink,
                         ),
                         onSelected: (_) => ordersController.setFilter(filter),
                       );
@@ -129,7 +145,16 @@ class _SummarySection extends StatelessWidget {
       return const Card(
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.xl),
-          child: Center(child: CircularProgressIndicator()),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SkeletonBox(width: 120, height: 22),
+              SizedBox(height: AppSpacing.lg),
+              SkeletonBox(height: 72, radius: AppSpacing.radiusLg),
+              SizedBox(height: AppSpacing.md),
+              SkeletonBox(height: 72, radius: AppSpacing.radiusLg),
+            ],
+          ),
         ),
       );
     }
@@ -145,7 +170,12 @@ class _SummarySection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(child: Text('Summary', style: text.titleLarge)),
+            Expanded(
+              child: Text(
+                'Summary',
+                style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
             Text(
               'As of ${formatDateTime(summary.generatedAt)}',
               style: text.labelSmall,
@@ -164,13 +194,13 @@ class _SummarySection extends StatelessWidget {
                 tint: status.isFailure
                     ? AppColors.dangerTint
                     : status.isSuccess
-                        ? AppColors.successTint
-                        : AppColors.surfaceWarm,
+                    ? AppColors.successTint
+                    : AppColors.surfaceWarm,
                 valueColor: status.isFailure
                     ? AppColors.danger
                     : status.isSuccess
-                        ? AppColors.success
-                        : AppColors.ink,
+                    ? AppColors.success
+                    : AppColors.ink,
               ),
             _StatCard(
               label: 'Pending outbox events',
@@ -277,7 +307,20 @@ class _OrdersSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (state.initialLoading) return const LoadingState(label: 'Loading orders…');
+    if (state.initialLoading) {
+      return const Shimmer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SkeletonListTile(),
+            SizedBox(height: AppSpacing.cardGap),
+            SkeletonListTile(),
+            SizedBox(height: AppSpacing.cardGap),
+            SkeletonListTile(),
+          ],
+        ),
+      );
+    }
 
     final error = state.error;
     if (error != null && state.items.isEmpty) {
@@ -298,10 +341,13 @@ class _OrdersSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final order in state.items) ...[
-          _AdminOrderCard(
-            order: order,
-            onTap: () => context.push('/orders/${order.id}'),
+        for (var i = 0; i < state.items.length; i++) ...[
+          Entrance(
+            index: i,
+            child: _AdminOrderCard(
+              order: state.items[i],
+              onTap: () => context.push('/orders/${state.items[i].id}'),
+            ),
           ),
           const SizedBox(height: AppSpacing.cardGap),
         ],
@@ -338,52 +384,70 @@ class _AdminOrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return Semantics(
-      button: true,
-      label: 'Order by ${order.customerEmail} from ${order.restaurantName}, '
-          'status ${order.status.label}',
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(order.customerEmail, style: text.titleSmall),
-                      const SizedBox(height: 2),
-                      Text(
-                        order.restaurantName,
-                        style: text.bodySmall,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        '${formatDateTime(order.createdAt)} · v${order.version}'
-                        '${order.failureCode != null ? ' · ${order.failureCode}' : ''}',
-                        style: text.labelSmall,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+    return Pressable(
+      onTap: onTap,
+      child: Semantics(
+        button: true,
+        label:
+            'Order by ${order.customerEmail} from ${order.restaurantName}, '
+            'status ${order.status.label}',
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            boxShadow: AppShadow.card,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    MoneyText(order.totalAmountMinor, currency: order.currency),
-                    const SizedBox(height: AppSpacing.sm),
-                    StatusChip(order.status, compact: true),
+                    Text(
+                      order.customerEmail,
+                      style: text.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      order.restaurantName,
+                      style: text.bodySmall?.copyWith(color: AppColors.inkSoft),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '${formatDateTime(order.createdAt)} · v${order.version}'
+                      '${order.failureCode != null ? ' · ${order.failureCode}' : ''}',
+                      style: text.labelSmall,
+                    ),
                   ],
                 ),
-                const SizedBox(width: AppSpacing.xs),
-                const Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
-              ],
-            ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  MoneyText(
+                    order.totalAmountMinor,
+                    currency: order.currency,
+                    style: text.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  StatusChip(order.status, compact: true),
+                ],
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.inkFaint,
+              ),
+            ],
           ),
         ),
       ),

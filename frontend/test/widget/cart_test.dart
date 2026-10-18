@@ -6,7 +6,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quickbite/app/router.dart';
 import 'package:quickbite/state/cart_controller.dart';
 
 import '../helpers/fakes.dart';
@@ -52,8 +51,8 @@ void main() {
       (tester) async {
     final backend = TestBackend();
     await backend.signIn();
-    final container = await pumpApp(tester, backend);
-    container.read(appRouterProvider).go('/cart');
+    await pumpApp(tester, backend);
+    await navTo(tester, '/cart');
     await tester.pump();
 
     expect(find.text('My Cart'), findsOneWidget);
@@ -64,8 +63,8 @@ void main() {
   testWidgets('renders the line, restaurant lock notice and subtotal preview',
       (tester) async {
     final backend = TestBackend();
-    final container = await _seedCart(tester, backend);
-    container.read(appRouterProvider).go('/cart');
+    await _seedCart(tester, backend);
+    await navTo(tester, '/cart');
     await tester.pump();
 
     expect(find.text('My Cart'), findsOneWidget);
@@ -88,7 +87,7 @@ void main() {
       (tester) async {
     final backend = TestBackend();
     final container = await _seedCart(tester, backend);
-    container.read(appRouterProvider).go('/cart');
+    await navTo(tester, '/cart');
     await tester.pump();
 
     // Increment to 2.
@@ -118,7 +117,7 @@ void main() {
   testWidgets('decrementing below the minimum removes the line', (tester) async {
     final backend = TestBackend();
     final container = await _seedCart(tester, backend);
-    container.read(appRouterProvider).go('/cart');
+    await navTo(tester, '/cart');
     await tester.pump();
 
     await tester.tap(_minusButton());
@@ -130,8 +129,8 @@ void main() {
 
   testWidgets('the remove action deletes exactly that line', (tester) async {
     final backend = TestBackend();
-    final container = await _seedCart(tester, backend);
-    container.read(appRouterProvider).go('/cart');
+    await _seedCart(tester, backend);
+    await navTo(tester, '/cart');
     await tester.pump();
 
     await tester.tap(find.byTooltip('Remove Margherita Pizza'));
@@ -142,8 +141,8 @@ void main() {
 
   testWidgets('clearing the cart requires confirmation', (tester) async {
     final backend = TestBackend();
-    final container = await _seedCart(tester, backend);
-    container.read(appRouterProvider).go('/cart');
+    await _seedCart(tester, backend);
+    await navTo(tester, '/cart');
     await tester.pump();
 
     await tester.tap(find.byTooltip('Clear cart'));
@@ -166,12 +165,14 @@ void main() {
 
   testWidgets('proceeding to checkout carries the cart', (tester) async {
     final backend = TestBackend();
-    final container = await _seedCart(tester, backend);
-    container.read(appRouterProvider).go('/cart');
+    await _seedCart(tester, backend);
+    await navTo(tester, '/cart');
     await tester.pump();
 
     await tester.tap(find.text('Proceed to checkout'));
     await tester.pump();
+    // Push navigation resolves asynchronously (same as navTo).
+    await tester.pump(const Duration(milliseconds: 700));
 
     expect(find.text('Checkout'), findsOneWidget);
     expect(find.text('₹350.00'), findsWidgets, reason: 'line + preview subtotal');

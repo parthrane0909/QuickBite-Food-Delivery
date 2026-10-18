@@ -24,6 +24,7 @@ class PaginatedListView<T> extends StatefulWidget {
     this.controller,
     this.empty,
     this.separatorBuilder,
+    this.gridDelegate,
   });
 
   final List<T> items;
@@ -36,6 +37,10 @@ class PaginatedListView<T> extends StatefulWidget {
   final ScrollController? controller;
   final Widget? empty;
   final IndexedWidgetBuilder? separatorBuilder;
+
+  /// When set, items render in a responsive grid (desktop/tablet layouts)
+  /// instead of rows; the load-more footer spans the full width beneath it.
+  final SliverGridDelegate? gridDelegate;
 
   @override
   State<PaginatedListView<T>> createState() => _PaginatedListViewState<T>();
@@ -80,6 +85,37 @@ class _PaginatedListViewState<T> extends State<PaginatedListView<T>> {
       return RefreshIndicator(onRefresh: widget.onRefresh, child: widget.empty!);
     }
     final count = items.length + (widget.hasMore || widget.loadingMore ? 1 : 0);
+
+    final grid = widget.gridDelegate;
+    if (grid != null) {
+      return RefreshIndicator(
+        onRefresh: widget.onRefresh,
+        child: CustomScrollView(
+          controller: _controller,
+          slivers: [
+            SliverPadding(
+              padding: widget.padding,
+              sliver: SliverGrid(
+                gridDelegate: grid,
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => widget.itemBuilder(context, index),
+                  childCount: items.length,
+                ),
+              ),
+            ),
+            if (widget.hasMore || widget.loadingMore)
+              SliverToBoxAdapter(
+                child: _Footer(
+                  loading: widget.loadingMore,
+                  hasMore: widget.hasMore,
+                  onRetry: widget.hasMore ? widget.onLoadMore : null,
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
       child: ListView.separated(

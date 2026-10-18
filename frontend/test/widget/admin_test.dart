@@ -6,6 +6,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quickbite/app/theme/app_colors.dart';
 import 'package:quickbite/core/network/api_exception.dart';
 import 'package:quickbite/domain/order_status.dart';
 
@@ -20,8 +21,9 @@ void main() {
   setUpAll(initTestLocale);
   setUp(resetPrefs);
 
-  testWidgets('an admin lands on the overview with server summary counts',
-      (tester) async {
+  testWidgets('an admin lands on the overview with server summary counts', (
+    tester,
+  ) async {
     final backend = TestBackend()
       ..admin.orderItems = [
         fixtureAdminOrderItem(customerEmail: 'alice@quickbite.dev'),
@@ -45,7 +47,11 @@ void main() {
     expect(find.text('Retry backlog'), findsOneWidget);
     expect(find.text('2'), findsWidgets);
     expect(find.text('Quarantine records'), findsOneWidget);
-    expect(find.text('Driver assigned'), findsWidgets, reason: 'status stat card');
+    expect(
+      find.text('Driver assigned'),
+      findsWidgets,
+      reason: 'status stat card',
+    );
     expect(
       find.textContaining('read-only'),
       findsOneWidget,
@@ -57,8 +63,9 @@ void main() {
     expect(find.text('bob@quickbite.dev'), findsOneWidget);
   });
 
-  testWidgets('the admin status filter queries the server with apiValue',
-      (tester) async {
+  testWidgets('the admin status filter queries the server with apiValue', (
+    tester,
+  ) async {
     final backend = TestBackend()
       ..admin.orderItems = [
         fixtureAdminOrderItem(customerEmail: 'alice@quickbite.dev'),
@@ -82,7 +89,40 @@ void main() {
     expect(find.text('alice@quickbite.dev'), findsNothing);
   });
 
-  testWidgets('admin orders show a filter-specific empty state', (tester) async {
+  testWidgets('selected admin filter chip label contrasts with its pill', (
+    tester,
+  ) async {
+    final backend = TestBackend()
+      ..admin.orderItems = [
+        fixtureAdminOrderItem(customerEmail: 'alice@quickbite.dev'),
+      ];
+    await backend.signIn(role: 'admin');
+    await pumpApp(tester, backend, surfaceSize: _tallSurface);
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Pending'));
+    await tester.pump();
+    await tester.pump();
+
+    // Regression: the selected chip's label used to be coral-on-coral
+    // (chipTheme.selectedColor) — invisible on every platform.
+    final selected = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, 'Pending'),
+    );
+    expect(selected.selected, isTrue);
+    expect(selected.labelStyle?.color, equals(AppColors.onPrimary));
+
+    final all = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, 'All'),
+    );
+    expect(all.selected, isFalse);
+    expect(all.labelStyle?.color, equals(AppColors.ink));
+  });
+
+  testWidgets('admin orders show a filter-specific empty state', (
+    tester,
+  ) async {
     final backend = TestBackend()
       ..admin.orderItems = [
         fixtureAdminOrderItem(customerEmail: 'alice@quickbite.dev'),
@@ -100,8 +140,9 @@ void main() {
     expect(find.text('No orders with status Confirmed.'), findsOneWidget);
   });
 
-  testWidgets('a 403 on admin data surfaces an error state with retry',
-      (tester) async {
+  testWidgets('a 403 on admin data surfaces an error state with retry', (
+    tester,
+  ) async {
     final backend = TestBackend()
       ..admin.ordersError = const ApiException(
         code: 'FORBIDDEN',
@@ -134,8 +175,9 @@ void main() {
     expect(find.text('Bella Napoli'), findsOneWidget, reason: 'catalog home');
   });
 
-  testWidgets('an admin is redirected away from customer surfaces',
-      (tester) async {
+  testWidgets('an admin is redirected away from customer surfaces', (
+    tester,
+  ) async {
     final backend = TestBackend();
     await backend.signIn(role: 'admin');
 
@@ -155,11 +197,15 @@ void main() {
     await unmountApp(tester);
   });
 
-  testWidgets('tapping an admin order card opens the shared tracking view',
-      (tester) async {
+  testWidgets('tapping an admin order card opens the shared tracking view', (
+    tester,
+  ) async {
     final backend = TestBackend()
       ..admin.orderItems = [
-        fixtureAdminOrderItem(id: 'order-1', customerEmail: 'alice@quickbite.dev'),
+        fixtureAdminOrderItem(
+          id: 'order-1',
+          customerEmail: 'alice@quickbite.dev',
+        ),
       ]
       ..orders.detail = fixtureOrderDetail(id: 'order-1');
     await backend.signIn(role: 'admin');

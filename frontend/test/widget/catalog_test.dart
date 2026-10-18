@@ -8,9 +8,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quickbite/app/router.dart';
 import 'package:quickbite/core/network/api_exception.dart';
 import 'package:quickbite/state/cart_controller.dart';
+import 'package:quickbite/ui/motion/shimmer.dart';
 
 import '../helpers/fakes.dart';
 import '../helpers/harness.dart';
@@ -20,14 +20,20 @@ void main() {
   setUp(resetPrefs);
 
   group('Restaurant list', () {
-    testWidgets('shows the loading state until the page arrives', (tester) async {
+    testWidgets('shows the loading state until the page arrives', (
+      tester,
+    ) async {
       final backend = TestBackend();
       final gate = Completer<void>();
       backend.catalog.restaurantsGate = gate;
       await backend.signIn();
       await pumpApp(tester, backend);
 
-      expect(find.text('Loading restaurants…'), findsOneWidget);
+      expect(
+        find.byType(SkeletonRestaurantCard),
+        findsWidgets,
+        reason: 'shimmer skeleton until the page arrives',
+      );
 
       gate.complete();
       await tester.pump();
@@ -38,10 +44,12 @@ void main() {
 
     testWidgets('renders the seeded restaurants', (tester) async {
       final backend = TestBackend(
-        catalog: FakeCatalogRepository(restaurantList: [
-          fixtureRestaurant(),
-          fixtureRestaurant(id: 'rest_roma', name: 'Roma Trattoria'),
-        ]),
+        catalog: FakeCatalogRepository(
+          restaurantList: [
+            fixtureRestaurant(),
+            fixtureRestaurant(id: 'rest_roma', name: 'Roma Trattoria'),
+          ],
+        ),
       );
       await backend.signIn();
       await pumpApp(tester, backend);
@@ -51,8 +59,9 @@ void main() {
       expect(find.text('Roma Trattoria'), findsOneWidget);
     });
 
-    testWidgets('shows the empty state when no restaurants are seeded',
-        (tester) async {
+    testWidgets('shows the empty state when no restaurants are seeded', (
+      tester,
+    ) async {
       final backend = TestBackend(
         catalog: FakeCatalogRepository(restaurantList: const []),
       );
@@ -111,7 +120,11 @@ void main() {
       await pumpApp(tester, backend, route: '/menu/rest_bella_napoli');
       await tester.pump();
 
-      expect(find.text('Loading menu…'), findsOneWidget);
+      expect(
+        find.byType(SkeletonListTile),
+        findsWidgets,
+        reason: 'shimmer row skeletons until the menu arrives',
+      );
 
       gate.complete();
       await tester.pump();
@@ -120,17 +133,20 @@ void main() {
       expect(find.text('Margherita Pizza'), findsOneWidget);
     });
 
-    testWidgets('unavailable items are visible but not purchasable',
-        (tester) async {
+    testWidgets('unavailable items are visible but not purchasable', (
+      tester,
+    ) async {
       final backend = TestBackend(
-        catalog: FakeCatalogRepository(menuItemList: [
-          fixtureMenuItem(),
-          fixtureMenuItem(
-            id: 'item_tiramisu',
-            name: 'Tiramisu',
-            isAvailable: false,
-          ),
-        ]),
+        catalog: FakeCatalogRepository(
+          menuItemList: [
+            fixtureMenuItem(),
+            fixtureMenuItem(
+              id: 'item_tiramisu',
+              name: 'Tiramisu',
+              isAvailable: false,
+            ),
+          ],
+        ),
       );
       await backend.signIn();
       await pumpApp(tester, backend, route: '/menu/rest_bella_napoli');
@@ -146,8 +162,9 @@ void main() {
       );
     });
 
-    testWidgets('shows the empty state when the menu has no items',
-        (tester) async {
+    testWidgets('shows the empty state when the menu has no items', (
+      tester,
+    ) async {
       final backend = TestBackend(
         catalog: FakeCatalogRepository(menuItemList: const []),
       );
@@ -179,8 +196,9 @@ void main() {
       expect(find.text('Margherita Pizza'), findsOneWidget);
     });
 
-    testWidgets('adding shows the cart bar and updating quantity updates it',
-        (tester) async {
+    testWidgets('adding shows the cart bar and updating quantity updates it', (
+      tester,
+    ) async {
       final backend = TestBackend();
       await backend.signIn();
       await pumpApp(tester, backend, route: '/menu/rest_bella_napoli');
@@ -196,20 +214,23 @@ void main() {
       expect(find.textContaining('2 items'), findsOneWidget);
     });
 
-    testWidgets('a cart from another restaurant prompts before replacing',
-        (tester) async {
+    testWidgets('a cart from another restaurant prompts before replacing', (
+      tester,
+    ) async {
       final backend = TestBackend();
       await backend.signIn();
       final container = await pumpApp(tester, backend);
       // Seed a cart that belongs to a DIFFERENT restaurant.
-      container.read(cartControllerProvider.notifier).add(
+      container
+          .read(cartControllerProvider.notifier)
+          .add(
             fixtureMenuItem(id: 'item_x', restaurantId: 'rest_other'),
             restaurantId: 'rest_other',
             restaurantName: 'Other Place',
           );
       await tester.pump();
 
-      container.read(appRouterProvider).go('/menu/rest_bella_napoli');
+      await navTo(tester, '/menu/rest_bella_napoli');
       await tester.pump();
       await tester.pump();
 
@@ -229,6 +250,58 @@ void main() {
       expect(cart.restaurantId, 'rest_bella_napoli');
       expect(cart.lines, hasLength(1));
       expect(cart.lines.single.name, 'Margherita Pizza');
+    });
+  });
+
+  group('Item detail', () {
+    testWidgets('shows the item and adds the selected quantity to the cart', (
+      tester,
+    ) async {
+      final backend = TestBackend();
+      await backend.signIn();
+      final container = await pumpApp(tester, backend);
+      await navTo(tester, '/menu/rest_bella_napoli/item/item_margherita_pizza');
+      await tester.pump();
+
+      // Full detail rendering: hero + name + price + description + add bar.
+      expect(find.text('Margherita Pizza'), findsOneWidget);
+      expect(
+        find.text('San Marzano tomato, mozzarella, basil'),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('Back'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Add to cart'), findsOneWidget);
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'the add bar must not starve the body of height',
+      );
+
+      // The stepper adjusts the live line total, then adds that quantity.
+      await tester.tap(find.byIcon(Icons.add_rounded));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Add to cart'));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final cart = container.read(cartControllerProvider);
+      expect(cart.lines.single.menuItemId, 'item_margherita_pizza');
+      expect(cart.lines.single.quantity, 2);
+      expect(find.text('Added to cart'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    });
+
+    testWidgets('an unknown item shows the not-found state', (tester) async {
+      final backend = TestBackend();
+      await backend.signIn();
+      await pumpApp(tester, backend);
+      await navTo(tester, '/menu/rest_bella_napoli/item/item_missing');
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Item not found'), findsOneWidget);
+      expect(find.byTooltip('Back'), findsOneWidget);
+      await unmountApp(tester);
     });
   });
 }

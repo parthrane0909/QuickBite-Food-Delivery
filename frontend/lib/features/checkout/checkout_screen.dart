@@ -22,6 +22,7 @@ import '../../core/utils/validation.dart';
 import '../../state/auth_controller.dart';
 import '../../state/cart_controller.dart';
 import '../../state/checkout_controller.dart';
+import '../../ui/motion/entrance.dart';
 import '../../ui/widgets/app_banner.dart';
 import '../../ui/widgets/async_state_view.dart';
 import '../../ui/widgets/money_text.dart';
@@ -72,7 +73,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Future<void> _discardAttempt() async {
     final uncertain =
-        ref.read(checkoutControllerProvider).lastError?.isUncertainOutcome ?? false;
+        ref.read(checkoutControllerProvider).lastError?.isUncertainOutcome ??
+        false;
     if (uncertain) {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -142,7 +144,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
     return (
       kind: AppBannerKind.danger,
-      title: hasPendingAttempt ? 'The server rejected the order' : 'Order not placed',
+      title: hasPendingAttempt
+          ? 'The server rejected the order'
+          : 'Order not placed',
       message: error.message,
     );
   }
@@ -154,8 +158,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final auth = ref.watch(authControllerProvider);
     final text = Theme.of(context).textTheme;
 
-    ref.listen(checkoutControllerProvider.select((state) => state.accepted),
-        (previous, next) {
+    ref.listen(checkoutControllerProvider.select((state) => state.accepted), (
+      previous,
+      next,
+    ) {
       if (next != null) {
         context.pushReplacement('/orders/${next.orderId}/accepted');
       }
@@ -216,8 +222,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   message: checkout.submitting
                       ? 'Sending your order…'
                       : 'Retrying your previous attempt: the SAME request with '
-                          'the SAME idempotency key is re-sent, so the server '
-                          'replays the original outcome instead of duplicating it.',
+                            'the SAME idempotency key is re-sent, so the server '
+                            'replays the original outcome instead of duplicating it.',
                 ),
                 const SizedBox(height: AppSpacing.lg),
               ],
@@ -233,36 +239,47 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ],
 
               // --- Delivery address ---
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Delivery address', style: text.titleMedium),
-                        const SizedBox(height: AppSpacing.sm),
-                        TextFormField(
-                          controller: _addressController,
-                          readOnly: sentPending || checkout.submitting,
-                          enabled: !checkout.submitting,
-                          maxLines: 3,
-                          maxLength: 500,
-                          minLines: 2,
-                          textCapitalization: TextCapitalization.sentences,
-                          decoration: InputDecoration(
-                            hintText: 'Flat / street / city — where should the '
-                                'driver deliver?',
-                            counterText:
-                                sentPending ? 'Locked while retrying' : null,
-                            helperText: sentPending
-                                ? 'Locked: a retry must resend the identical request.'
-                                : null,
+              Entrance(
+                index: 0,
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Delivery address',
+                            style: text.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                          validator: (value) => validateDeliveryAddress(value ?? ''),
-                        ),
-                      ],
+                          const SizedBox(height: AppSpacing.sm),
+                          TextFormField(
+                            controller: _addressController,
+                            readOnly: sentPending || checkout.submitting,
+                            enabled: !checkout.submitting,
+                            maxLines: 3,
+                            maxLength: 500,
+                            minLines: 2,
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: InputDecoration(
+                              hintText:
+                                  'Flat / street / city — where should the '
+                                  'driver deliver?',
+                              counterText: sentPending
+                                  ? 'Locked while retrying'
+                                  : null,
+                              helperText: sentPending
+                                  ? 'Locked: a retry must resend the identical request.'
+                                  : null,
+                            ),
+                            validator: (value) =>
+                                validateDeliveryAddress(value ?? ''),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -270,93 +287,108 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               const SizedBox(height: AppSpacing.lg),
 
               // --- Order summary ---
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              restaurantName,
-                              style: text.titleMedium,
-                              overflow: TextOverflow.ellipsis,
+              Entrance(
+                index: 1,
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                restaurantName,
+                                style: text.titleMedium,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                          ),
-                          Text(
-                            '${lines.length} item${lines.length == 1 ? '' : 's'}',
-                            style: text.bodySmall,
-                          ),
-                        ],
-                      ),
-                      const Divider(height: AppSpacing.xl),
-                      for (final line in lines)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  '${line.quantity} × ${line.name}',
-                                  style: text.bodyMedium,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              MoneyText(
-                                line.lineTotalMinor,
-                                currency: line.currency,
-                                style: text.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
+                            Text(
+                              '${lines.length} item${lines.length == 1 ? '' : 's'}',
+                              style: text.bodySmall,
+                            ),
+                          ],
                         ),
-                      const Divider(height: AppSpacing.xl),
-                      // Flexible label: narrow screens must never overflow.
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              'Subtotal (preview)',
-                              style: text.bodyLarge,
-                              overflow: TextOverflow.ellipsis,
+                        const Divider(height: AppSpacing.xl),
+                        for (final line in lines)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '${line.quantity} × ${line.name}',
+                                    style: text.bodyMedium,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                MoneyText(
+                                  line.lineTotalMinor,
+                                  currency: line.currency,
+                                  style: text.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: AppSpacing.sm),
-                          MoneyText(subtotal, currency: currency, style: text.titleMedium),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        'The final order total is computed by the QuickBite '
-                        'server when your order is accepted — prices on this '
-                        'screen are a preview.',
-                        style: text.bodySmall,
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+                        const Divider(height: AppSpacing.xl),
+                        // Flexible label: narrow screens must never overflow.
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Subtotal (preview)',
+                                style: text.bodyLarge,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            MoneyText(
+                              subtotal,
+                              currency: currency,
+                              style: text.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          'The final order total is computed by the QuickBite '
+                          'server when your order is accepted — prices on this '
+                          'screen are a preview.',
+                          style: text.bodySmall,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
 
               // --- Actions ---
-              PrimaryButton(
-                label: sentPending
-                    ? (checkout.submitting ? 'Retrying…' : 'Retry same order (safe)')
-                    : 'Place order',
-                loading: checkout.submitting,
-                onPressed: checkout.submitting
-                    ? null
-                    : () => _placeOrder(
+              Entrance(
+                index: 2,
+                child: PrimaryButton(
+                  label: sentPending
+                      ? (checkout.submitting
+                            ? 'Retrying…'
+                            : 'Retry same order (safe)')
+                      : 'Place order',
+                  loading: checkout.submitting,
+                  onPressed: checkout.submitting
+                      ? null
+                      : () => _placeOrder(
                           hasPending: sentPending,
                           cart: cart,
                           restaurantName: restaurantName,
                         ),
+                ),
               ),
               if (hasPending && !checkout.submitting) ...[
                 const SizedBox(height: AppSpacing.md),

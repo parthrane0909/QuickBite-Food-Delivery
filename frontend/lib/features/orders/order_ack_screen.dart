@@ -15,8 +15,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../state/checkout_controller.dart';
+import '../../ui/motion/entrance.dart';
 import '../../ui/widgets/money_text.dart';
+import '../../ui/widgets/primary_button.dart';
 import '../../ui/widgets/status_chip.dart';
+import '../../ui/widgets/success_burst.dart';
 
 class OrderAckScreen extends ConsumerStatefulWidget {
   const OrderAckScreen({super.key, required this.orderId});
@@ -69,34 +72,17 @@ class _OrderAckScreenState extends ConsumerState<OrderAckScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: AppSpacing.lg),
-                  // Confirmation mark (drawn — original, no external art).
-                  Center(
-                    child: TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0.6, end: 1),
-                      duration: const Duration(milliseconds: 450),
-                      curve: Curves.easeOutBack,
-                      builder: (context, scale, child) =>
-                          Transform.scale(scale: scale, child: child),
-                      child: Container(
-                        width: 104,
-                        height: 104,
-                        decoration: const BoxDecoration(
-                          color: AppColors.primaryTint,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.check_rounded,
-                          size: 60,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ),
-                  ),
+                  // Confirmation moment (drawn check + halo — original art,
+                  // no external assets).
+                  const Center(child: SuccessBurst(size: 108)),
                   const SizedBox(height: AppSpacing.xl),
                   Text(
                     'Order accepted!',
                     textAlign: TextAlign.center,
-                    style: text.headlineLarge,
+                    style: text.headlineLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
@@ -108,46 +94,57 @@ class _OrderAckScreenState extends ConsumerState<OrderAckScreen> {
                   ),
                   const SizedBox(height: AppSpacing.xl),
 
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      child: Column(
-                        children: [
-                          _DetailRow(
-                            label: 'Order ID',
-                            value: accepted.orderId,
-                            selectable: true,
-                            mono: true,
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          _DetailRow(
-                            label: 'Accepted total',
-                            child: MoneyText(
-                              accepted.totalAmountMinor,
-                              currency: accepted.currency,
-                              style: text.titleMedium,
+                  Entrance(
+                    index: 1,
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        child: Column(
+                          children: [
+                            _DetailRow(
+                              label: 'Order ID',
+                              value: accepted.orderId,
+                              selectable: true,
+                              mono: true,
                             ),
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('Status', style: text.bodyMedium),
-                              StatusChip(accepted.status),
-                            ],
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          _DetailRow(label: 'Server message', value: accepted.message),
-                        ],
+                            const SizedBox(height: AppSpacing.md),
+                            _DetailRow(
+                              label: 'Accepted total',
+                              child: MoneyText(
+                                accepted.totalAmountMinor,
+                                currency: accepted.currency,
+                                style: text.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Status', style: text.bodyMedium),
+                                StatusChip(accepted.status),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            _DetailRow(
+                                label: 'Server message',
+                                value: accepted.message),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
 
-                  FilledButton.icon(
-                    onPressed: () => context.go('/orders/${accepted.orderId}'),
-                    icon: const Icon(Icons.route_rounded),
-                    label: const Text('Track this order'),
+                  Entrance(
+                    index: 2,
+                    child: PrimaryButton(
+                      label: 'Track this order',
+                      leadingIcon: Icons.route_rounded,
+                      onPressed: () => context.go('/orders/${accepted.orderId}'),
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   OutlinedButton.icon(

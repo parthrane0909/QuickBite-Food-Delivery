@@ -27,6 +27,7 @@ class CartLine {
     required this.currency,
     required this.isAvailable,
     required this.quantity,
+    this.imageAsset,
   });
 
   final String menuItemId;
@@ -35,6 +36,11 @@ class CartLine {
   final String currency;
   final bool isAvailable;
   final int quantity;
+
+  /// Bundled photo path copied from the menu item when added (UI-only —
+  /// local cart persistence, not a backend field). Null on carts saved
+  /// before this field existed -> the image widget falls back gracefully.
+  final String? imageAsset;
 
   int get lineTotalMinor => priceMinor * quantity;
 
@@ -45,6 +51,7 @@ class CartLine {
         currency: currency,
         isAvailable: isAvailable,
         quantity: quantity,
+        imageAsset: imageAsset,
       );
 
   Map<String, dynamic> toJson() => {
@@ -54,6 +61,7 @@ class CartLine {
         'currency': currency,
         'is_available': isAvailable,
         'quantity': quantity,
+        'image_asset': imageAsset,
       };
 
   factory CartLine.fromJson(Map<String, dynamic> json) => CartLine(
@@ -63,6 +71,7 @@ class CartLine {
         currency: json['currency'] as String,
         isAvailable: json['is_available'] as bool? ?? true,
         quantity: json['quantity'] as int,
+        imageAsset: json['image_asset'] as String?,
       );
 }
 
@@ -181,6 +190,7 @@ class CartController extends Notifier<CartState> {
           currency: item.currency,
           isAvailable: item.isAvailable,
           quantity: kQuantityMin,
+          imageAsset: item.imageAsset,
         ),
       ],
     ));

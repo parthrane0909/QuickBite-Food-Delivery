@@ -24,12 +24,22 @@ final _orderIdPattern = RegExp(r'^order_[0-9a-zA-Z_-]+$');
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-      'customer journey: sign in, browse menu, checkout, watch live tracking, '
+  testWidgets('customer journey: sign in, browse menu, checkout, watch live tracking, '
       'see history and notifications', (tester) async {
     app.main();
 
     // ---- 1. Sign in (real auth against the seeded demo account) ----------
+    // Signed-out visitors land on the welcome page first (new in the UI
+    // rehaul); "Sign in" leads to the login form.
+    await _waitFor(
+      tester,
+      find.text('Great food, from kitchens near you.'),
+      label: 'welcome screen',
+    );
+    final welcomeSignIn = find.widgetWithText(FilledButton, 'Sign in');
+    await _scrollIntoView(tester, welcomeSignIn);
+    await tester.tap(welcomeSignIn);
+
     await _waitFor(tester, find.text('Sign In'), label: 'login screen');
     await tester.enterText(
       find.byType(TextFormField).first,
@@ -46,8 +56,7 @@ void main() {
 
     // ---- 2. Browse the seeded catalog ------------------------------------
     // Sorted by name: Bella Napoli is the first card.
-    await _waitFor(tester, find.text('Bella Napoli'),
-        label: 'restaurant list');
+    await _waitFor(tester, find.text('Bella Napoli'), label: 'restaurant list');
     await tester.tap(find.text('Bella Napoli'));
 
     // ---- 3. Open the menu, add the first available item -------------------
@@ -55,13 +64,19 @@ void main() {
     final addButtons = find.widgetWithText(FilledButton, 'Add');
     await _scrollIntoView(tester, addButtons.first);
     await tester.tap(addButtons.first);
-    await _waitFor(tester, find.textContaining('View cart'),
-        label: 'floating cart bar');
+    await _waitFor(
+      tester,
+      find.textContaining('View cart'),
+      label: 'floating cart bar',
+    );
 
     // ---- 4. Cart -> checkout -> place the order ---------------------------
     await tester.tap(find.textContaining('View cart'));
-    await _waitFor(tester, find.text('Proceed to checkout'),
-        label: 'cart screen');
+    await _waitFor(
+      tester,
+      find.text('Proceed to checkout'),
+      label: 'cart screen',
+    );
     await _scrollIntoView(tester, find.text('Proceed to checkout'));
     await tester.tap(find.text('Proceed to checkout'));
 
@@ -73,12 +88,18 @@ void main() {
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump();
     await _scrollIntoView(
-        tester, find.widgetWithText(FilledButton, 'Place order'));
+      tester,
+      find.widgetWithText(FilledButton, 'Place order'),
+    );
     await tester.tap(find.widgetWithText(FilledButton, 'Place order'));
 
     // ---- 5. 202 acceptance (NOT a paid/delivered claim) -------------------
-    await _waitFor(tester, find.text('Order accepted!'),
-        label: 'order acceptance', timeout: const Duration(seconds: 30));
+    await _waitFor(
+      tester,
+      find.text('Order accepted!'),
+      label: 'order acceptance',
+      timeout: const Duration(seconds: 30),
+    );
 
     // Capture the authoritative order id straight from the server response.
     // The ack row renders it with SelectableText (EditableText underneath),
@@ -86,10 +107,11 @@ void main() {
     final idFinder = find.textContaining(_orderIdPattern);
     await _waitFor(tester, idFinder, label: 'order id');
     final idWidget = idFinder.first.evaluate().first.widget;
-    final orderId = (idWidget is EditableText
-            ? idWidget.controller.text
-            : (idWidget as Text).data)!
-        .trim();
+    final orderId =
+        (idWidget is EditableText
+                ? idWidget.controller.text
+                : (idWidget as Text).data)!
+            .trim();
     expect(orderId, startsWith('order_'));
     expect(
       find.text('Accepted total'),
@@ -99,14 +121,20 @@ void main() {
 
     // ---- 6. Watch the asynchronous pipeline until the terminal state ------
     await tester.tap(find.widgetWithText(FilledButton, 'Track this order'));
-    await _waitFor(tester, find.text('Order details'),
-        label: 'tracking screen');
+    await _waitFor(
+      tester,
+      find.text('Order details'),
+      label: 'tracking screen',
+    );
 
     // The real workers drive PENDING -> ... -> DRIVER_ASSIGNED (terminal);
     // the status card is the first card, so no scrolling is needed here.
-    await _waitFor(tester, find.text('Driver assigned'),
-        label: 'terminal status',
-        timeout: const Duration(seconds: 90));
+    await _waitFor(
+      tester,
+      find.text('Driver assigned'),
+      label: 'terminal status',
+      timeout: const Duration(seconds: 90),
+    );
     expect(
       find.textContaining('final state'),
       findsWidgets,
@@ -116,9 +144,12 @@ void main() {
     // Per-order notifications sit at the bottom of the scroll view, below
     // the (now stable) status/timeline/details cards.
     await _scrollToBottom(tester);
-    await _waitFor(tester, find.textContaining('received —'),
-        label: 'persisted notification',
-        timeout: const Duration(seconds: 30));
+    await _waitFor(
+      tester,
+      find.textContaining('received —'),
+      label: 'persisted notification',
+      timeout: const Duration(seconds: 30),
+    );
 
     // ---- 7. Back out to the order history; the order must be listed --------
     await tester.tap(find.byTooltip('Back'));
@@ -131,8 +162,12 @@ void main() {
       await tester.tap(find.text('View order history'));
     }
     await _waitFor(tester, find.text('Order history'), label: 'order history');
-    await _waitFor(tester, find.text('Order $orderId'),
-        label: 'order in history', timeout: const Duration(seconds: 30));
+    await _waitFor(
+      tester,
+      find.text('Order $orderId'),
+      label: 'order in history',
+      timeout: const Duration(seconds: 30),
+    );
   });
 }
 

@@ -1,0 +1,54 @@
+{
+  "item_baked_cheesecake": {
+    "commons_file": "File:New York Cheesecake - 12387176913.jpg",
+    "index": 6
+  },
+  "item_chocolate_truffle": {
+    "commons_file": "File:Piece of chocolate cake on a white plate decorated with chocolate sauce.jpg",
+    "index": 5
+  },
+  "item_crab_masala": {
+    "commons_file": "File:Kerala Chilli Crab.jpg",
+    "index": 5
+  },
+  "item_fish_curry": {
+    "commons_file": "File:Meen curry (fish curry) from Kerala, traditionally prepared in earthern pot.jpg",
+    "index": 4
+  },
+  "item_garlic_bread": {
+    "commons_file": "File:Garlic bread - on plate, ready to eat.jpg",
+    "index": 3
+  },
+  "item_garlic_naan": {
+    "commons_file": "File:ButterNaan.JPG",
+    "index": 0
+  },
+  "item_hyderabadi_biryani": {
+    "commons_file": "File:Chicken biriyani- My cafe restaurant - Meghalaya DSC 009.jpg",
+    "index": 5
+  },
+  "item_mango_lassi": {
+    "commons_file": "File:Tasty Mango lassi picture.JPG",
+    "index": 1
+  },
+  "item_paneer_tikka": {
+    "commons_file": "File:Paneer tikka 1.jpg",
+    "index": 3
+  },
+  "item_red_velvet_slice": {
+    "commons_file": "File:Red Velvet Cake Waldorf Astoria.jpg",
+    "index": 3
+  },
+  "item_tandoori_chicken": {
+    "commons_file": "File:Tandoori chicken Indian.jpg",
+    "index": 4
+  },
+  "rest_bella_napoli": {
+    "commons_file": "File:Pizza baking in Wood-fired oven.jpg",
+    "index": 0
+  },
+  "rest_sweet_crumb": {
+    "commons_file": "File:Carrot cake - Milfey Patisserie 2026-04-04.jpg",
+    "index": 6
+  }
+}

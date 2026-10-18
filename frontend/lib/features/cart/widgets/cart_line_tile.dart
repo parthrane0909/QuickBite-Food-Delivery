@@ -35,7 +35,11 @@ class CartLineTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            FoodImage(itemId: line.menuItemId, size: 60),
+            FoodImage(
+              itemId: line.menuItemId,
+              assetName: line.imageAsset,
+              size: 64,
+            ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
@@ -44,7 +48,12 @@ class CartLineTile extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(line.name, style: text.titleSmall, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          line.name,
+                          style:
+                              text.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       IconButton(
                         tooltip: 'Remove ${line.name}',
@@ -91,6 +100,9 @@ class CartLineTile extends StatelessWidget {
                           line.lineTotalMinor,
                           currency: line.currency,
                           overflow: TextOverflow.ellipsis,
+                          style: text.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
                     ],

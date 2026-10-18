@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."
 
 PKG=dev.quickbite.quickbite
 REMOTE=code_cache/m5screens
-OUT=docs/evidence/m5/screens_android
+OUT="${OUT_DIR:-docs/evidence/m5/screens_android}"
 ADB="${ADB:-adb}"
 SERIAL="${ADB_SERIAL:-}"
 

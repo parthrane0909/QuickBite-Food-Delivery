@@ -7,7 +7,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quickbite/app/router.dart';
 import 'package:quickbite/core/network/api_exception.dart';
 import 'package:quickbite/state/cart_controller.dart';
 
@@ -39,7 +38,7 @@ Future<ProviderContainer> _openCheckout(
   if (quantity > 1) cart.setQuantity('item_margherita_pizza', quantity);
   await tester.pump();
 
-  container.read(appRouterProvider).go('/checkout');
+  await navTo(tester, '/checkout');
   await tester.pump();
   expect(find.text('Checkout'), findsOneWidget);
   return container;
@@ -61,8 +60,8 @@ void main() {
   testWidgets('empty cart shows the nothing-to-check-out state', (tester) async {
     final backend = TestBackend();
     await backend.signIn();
-    final container = await pumpApp(tester, backend);
-    container.read(appRouterProvider).go('/checkout');
+    await pumpApp(tester, backend);
+    await navTo(tester, '/checkout');
     await tester.pump();
 
     expect(find.text('Nothing to check out'), findsOneWidget);

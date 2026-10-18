@@ -12,7 +12,9 @@ import '../helpers/fakes.dart';
 import '../helpers/harness.dart';
 
 Future<void> _openLogin(WidgetTester tester, TestBackend backend) async {
-  await pumpApp(tester, backend);
+  // The signed-out landing page is /welcome; login is an explicit step.
+  await pumpApp(tester, backend, route: '/login');
+  await settleAuth(tester);
   expect(find.byType(TextFormField), findsNWidgets(2), reason: 'email + password');
 }
 
@@ -140,22 +142,43 @@ void main() {
     await unmountApp(tester);
   });
 
-  testWidgets('sign out asks for confirmation and returns to login',
+  testWidgets('sign out asks for confirmation and returns to welcome',
       (tester) async {
     final backend = TestBackend();
     await backend.signIn();
     await pumpApp(tester, backend);
     expect(find.text('Bella Napoli'), findsOneWidget);
 
-    await tester.tap(find.text('Sign out'));
+    // Sign out lives on the Account tab (new IA: Home / Orders / Account).
+    await tester.tap(find.text('Account'));
+    await tester.pump();
+    await settleAuth(tester);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign out'));
     await tester.pump();
     expect(find.text('Sign out?'), findsOneWidget);
     expect(find.text('You will need to sign in again to browse QuickBite.'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Sign out'));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Sign out'),
+      ),
+    );
     await tester.pump();
     await settleAuth(tester);
 
-    expect(find.byType(TextFormField), findsNWidgets(2), reason: 'back on login');
+    // Signed-out landing page (welcome) — sign-in still one tap away.
+    // (The pitch can extend below the fold on short viewports — scroll it up.)
+    expect(find.text('Great food, from kitchens near you.'), findsOneWidget);
+    final signInButton = find.widgetWithText(FilledButton, 'Sign in');
+    await tester.ensureVisible(signInButton);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(signInButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+    await settleAuth(tester);
+    expect(find.byType(TextFormField), findsNWidgets(2), reason: 'login from welcome');
+    await unmountApp(tester);
   });
 }

@@ -54,5 +54,10 @@ frontend/ios/Flutter/App.framework
 logs/
 local-data/
 
+# Design references and audit/review contact sheets (not app source; the
+# copyrighted reference screenshots are cited in docs, never redistributed)
+quickbitetemplate_*.png
+docs/ui-rehaul-review/
+
 # NOTE: dependency lockfiles (backend/uv.lock, frontend/pubspec.lock) are
 # intentionally committed — do NOT add them here.

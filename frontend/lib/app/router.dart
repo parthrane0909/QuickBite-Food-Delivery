@@ -3,10 +3,13 @@
 ///
 /// Route map:
 ///   /                     -> splash (session restore) -> role home
+///   /welcome              -> signed-out landing page
 ///   /login                -> sign-in
-///   [shell branches]      /restaurants (0), /orders (1, customer), /admin (2)
-///   full-screen pushes    /menu/:id, /cart, /checkout,
-///                         /orders/:id/accepted, /orders/:id, /cart
+///   [shell branches]      /restaurants (0), /orders (1), /admin (2),
+///                         /account (3) — customer tabs are Home/Orders/
+///                         Account; admin uses branch 2 only
+///   full-screen pushes    /menu/:id, /menu/:id/item/:itemId, /cart,
+///                         /checkout, /orders/:id/accepted, /orders/:id
 ///
 /// Auth redirects re-run whenever [authControllerProvider] changes (bridged
 /// through a refresh [Listenable]), so sign-in, sign-out and server-side
@@ -18,11 +21,13 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/account/account_screen.dart';
 import '../features/admin/admin_dashboard_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/cart/cart_screen.dart';
 import '../features/checkout/checkout_screen.dart';
 import '../features/errors/not_found_screen.dart';
+import '../features/menu/item_detail_screen.dart';
 import '../features/menu/restaurant_menu_screen.dart';
 import '../features/orders/order_ack_screen.dart';
 import '../features/orders/order_history_screen.dart';
@@ -30,8 +35,10 @@ import '../features/orders/order_tracking_screen.dart';
 import '../features/restaurants/restaurant_list_screen.dart';
 import '../features/shell/app_shell.dart';
 import '../features/splash/splash_screen.dart';
+import '../features/welcome/welcome_screen.dart';
 import '../state/auth_controller.dart';
 import '../data/dto/catalog_dto.dart';
+import 'transitions.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -44,12 +51,16 @@ String? _redirect(Ref ref, GoRouterState state) {
 
   if (!auth.isSignedIn) {
     if (path == '/login') return null;
-    if (path == '/' || path.isEmpty) return '/login';
+    if (path == '/welcome') return null; // signed-out landing page
+    if (path == '/' || path.isEmpty) return '/welcome';
+    // Deep links skip the landing page and go straight to sign-in with a
+    // return target (preserved ?next= behaviour).
     return '/login?next=${Uri.encodeComponent(path)}';
   }
 
   // Signed in.
   if (path == '/' || path.isEmpty) return auth.isAdmin ? '/admin' : '/restaurants';
+  if (path == '/welcome') return auth.isAdmin ? '/admin' : '/restaurants';
   if (path == '/login') {
     final next = state.uri.queryParameters['next'];
     if (next != null && next.startsWith('/') && !next.startsWith('//')) return next;
@@ -60,6 +71,7 @@ String? _redirect(Ref ref, GoRouterState state) {
   // endpoints (the API would answer 403) or checkout (no payment role).
   if (auth.isAdmin && path == '/orders') return '/admin';
   if (auth.isAdmin && (path == '/cart' || path == '/checkout')) return '/admin';
+  if (auth.isAdmin && path == '/account') return '/admin';
   return null;
 }
 
@@ -80,8 +92,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
+        path: '/welcome',
+        pageBuilder: (context, state) => fadePage<void>(
+          key: state.pageKey,
+          child: const WelcomeScreen(),
+        ),
+      ),
+      GoRoute(
         path: '/login',
-        builder: (context, state) => const LoginScreen(),
+        pageBuilder: (context, state) => fadePage<void>(
+          key: state.pageKey,
+          child: const LoginScreen(),
+        ),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(shell: shell),
@@ -110,32 +132,65 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/account',
+                builder: (context, state) => const AccountScreen(),
+              ),
+            ],
+          ),
         ],
       ),
       GoRoute(
+        path: '/menu/:id/item/:itemId',
+        pageBuilder: (context, state) => risePage<void>(
+          key: state.pageKey,
+          child: ItemDetailScreen(
+            restaurantId: state.pathParameters['id']!,
+            itemId: state.pathParameters['itemId']!,
+            restaurant:
+                state.extra is Restaurant ? state.extra as Restaurant : null,
+          ),
+        ),
+      ),
+      GoRoute(
         path: '/menu/:id',
-        builder: (context, state) => RestaurantMenuScreen(
-          restaurantId: state.pathParameters['id']!,
-          restaurant: state.extra is Restaurant ? state.extra as Restaurant : null,
+        pageBuilder: (context, state) => fadeSlidePage<void>(
+          key: state.pageKey,
+          child: RestaurantMenuScreen(
+            restaurantId: state.pathParameters['id']!,
+            restaurant: state.extra is Restaurant ? state.extra as Restaurant : null,
+          ),
         ),
       ),
       GoRoute(
         path: '/cart',
-        builder: (context, state) => const CartScreen(),
+        pageBuilder: (context, state) => fadeSlidePage<void>(
+          key: state.pageKey,
+          child: const CartScreen(),
+        ),
       ),
       GoRoute(
         path: '/checkout',
-        builder: (context, state) => const CheckoutScreen(),
+        pageBuilder: (context, state) => fadeSlidePage<void>(
+          key: state.pageKey,
+          child: const CheckoutScreen(),
+        ),
       ),
       GoRoute(
         path: '/orders/:id/accepted',
-        builder: (context, state) =>
-            OrderAckScreen(orderId: state.pathParameters['id']!),
+        pageBuilder: (context, state) => fadePage<void>(
+          key: state.pageKey,
+          child: OrderAckScreen(orderId: state.pathParameters['id']!),
+        ),
       ),
       GoRoute(
         path: '/orders/:id',
-        builder: (context, state) =>
-            OrderTrackingScreen(orderId: state.pathParameters['id']!),
+        pageBuilder: (context, state) => fadeSlidePage<void>(
+          key: state.pageKey,
+          child: OrderTrackingScreen(orderId: state.pathParameters['id']!),
+        ),
       ),
     ],
   );

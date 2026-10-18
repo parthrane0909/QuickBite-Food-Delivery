@@ -3,7 +3,14 @@
 /// pagination. Available items add to the cart (quantity steppers when in
 /// cart); unavailable items are never purchasable. Single-restaurant cart
 /// rule is enforced by the cart controller; conflicts resolve through an
-/// explicit confirm dialog (no silent data loss).
+/// explicit confirm dialog (no silent data loss) via the shared
+/// [handleCartAdd] helper.
+///
+/// UI rehaul: photographic hero from the restaurant's real `imageAsset`
+/// (the old static brown banner is gone), a raised overlapping info card,
+/// shimmer row skeletons, pressable rows that open the NEW item detail
+/// screen, and a desktop-capped content column. The floating **View cart**
+/// bar and all contract copy are preserved (integration contract).
 library;
 
 import 'package:flutter/material.dart';
@@ -15,10 +22,14 @@ import '../../data/dto/catalog_dto.dart';
 import '../../state/auth_controller.dart';
 import '../../state/cart_controller.dart';
 import '../../state/catalog_providers.dart';
+import '../../ui/motion/entrance.dart';
+import '../../ui/motion/shimmer.dart';
 import '../../ui/widgets/async_state_view.dart';
 import '../../ui/widgets/food_image.dart';
 import '../../ui/widgets/money_text.dart';
+import '../../ui/widgets/pressable.dart';
 import '../../ui/widgets/quantity_stepper.dart';
+import '../cart/cart_add_actions.dart';
 
 class RestaurantMenuScreen extends ConsumerStatefulWidget {
   const RestaurantMenuScreen({
@@ -58,68 +69,26 @@ class _RestaurantMenuScreenState extends ConsumerState<RestaurantMenuScreen> {
   }
 
   void _addToCart(MenuItem item) {
-    final cart = ref.read(cartControllerProvider.notifier);
-    final restaurantName = _resolved?.name ?? '';
-    final result = cart.add(
-      item,
-      restaurantId: widget.restaurantId,
-      restaurantName: restaurantName,
-    );
-    _handleResult(result, item, restaurantName);
-  }
-
-  void _handleResult(CartAddResult result, MenuItem item, String restaurantName) {
-    final messenger = ScaffoldMessenger.of(context);
-    switch (result) {
-      case CartAddResult.added:
-        return;
-      case CartAddResult.quantityMaxed:
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Maximum quantity per item is 20.')),
+    final result = ref.read(cartControllerProvider.notifier).add(
+          item,
+          restaurantId: widget.restaurantId,
+          restaurantName: _resolved?.name ?? '',
         );
-      case CartAddResult.tooManyDistinctItems:
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Cart holds up to 20 different items.')),
-        );
-      case CartAddResult.restaurantConflict:
-        _showConflictDialog(item, restaurantName);
-    }
-  }
-
-  Future<void> _showConflictDialog(MenuItem item, String newRestaurantName) async {
-    final cart = ref.read(cartControllerProvider);
-    final existingName = cart.restaurantName?.isNotEmpty == true
-        ? cart.restaurantName!
-        : 'another restaurant';
-    final confirmed = await showDialog<bool>(
+    handleCartAdd(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Start a new cart?'),
-        content: Text(
-          'Your cart has items from $existingName. '
-          'Adding "${item.name}" from ${newRestaurantName.isEmpty ? 'this restaurant' : newRestaurantName} '
-          'will clear it first.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: FilledButton.styleFrom(minimumSize: const Size(150, 44)),
-            child: const Text('Clear & add'),
-          ),
-        ],
-      ),
+      ref: ref,
+      result: result,
+      item: item,
+      restaurantId: widget.restaurantId,
+      restaurantName: _resolved?.name ?? '',
     );
-    if (confirmed ?? false) {
-      ref.read(cartControllerProvider.notifier).replaceAndAdd(
-            item,
-            restaurantId: widget.restaurantId,
-            restaurantName: newRestaurantName,
-          );
-    }
+  }
+
+  void _openDetail(MenuItem item) {
+    context.push(
+      '/menu/${widget.restaurantId}/item/${item.id}',
+      extra: _resolved ?? widget.restaurant,
+    );
   }
 
   @override
@@ -131,197 +100,236 @@ class _RestaurantMenuScreenState extends ConsumerState<RestaurantMenuScreen> {
     final restaurant = _resolved;
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          // --- Photographic hero + restaurant info (reference layout) ---
-          SliverToBoxAdapter(
-            child: Stack(
-              children: [
-                SizedBox(
-                  height: 190,
-                  width: double.infinity,
-                  child: Image.asset(
-                    'assets/images/hero_banner.png',
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) =>
-                        const ColoredBox(color: Color(0xFF3A241C)),
-                  ),
+      backgroundColor: AppColors.background,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 880),
+          child: CustomScrollView(
+            slivers: [
+              // --- Photographic hero from the restaurant's real image ---
+              SliverToBoxAdapter(
+                child: Stack(
+                  children: [
+                    SizedBox(
+                      height: 236,
+                      width: double.infinity,
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(AppSpacing.radiusXl),
+                          bottomRight: Radius.circular(AppSpacing.radiusXl),
+                        ),
+                        child: _MenuHero(restaurant: restaurant),
+                      ),
+                    ),
+                    const Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Color(0x661C1411),
+                              Color(0x001C1411),
+                              Color(0x991C1411),
+                            ],
+                            stops: [0.0, 0.5, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: MediaQuery.paddingOf(context).top + 8,
+                      left: AppSpacing.md,
+                      child: _CircleAction(
+                        icon: Icons.arrow_back_rounded,
+                        tooltip: 'Back',
+                        // canPop guard: a deep-link reload (web) starts with an
+                        // empty stack, so pop() alone would have nowhere to go.
+                        onPressed: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go('/restaurants');
+                          }
+                        },
+                      ),
+                    ),
+                  ],
                 ),
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          AppColors.heroScrim.withValues(alpha: 0.5),
-                          AppColors.heroScrim.withValues(alpha: 0.1),
+              ),
+              // --- Overlapping raised info card ---
+              SliverToBoxAdapter(
+                child: Transform.translate(
+                  offset: const Offset(0, -52),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    child: Container(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusLg),
+                        boxShadow: AppShadow.raised,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          RestaurantAvatar(
+                            name: restaurant?.name ?? 'Menu',
+                            size: 56,
+                          ),
+                          const SizedBox(width: AppSpacing.lg),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  restaurant?.name ?? 'Menu',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleLarge
+                                      ?.copyWith(fontWeight: FontWeight.w800),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (restaurant?.description != null &&
+                                    restaurant!.description!.isNotEmpty) ...[
+                                  const SizedBox(height: AppSpacing.xs),
+                                  Text(
+                                    restaurant.description!,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                                if (restaurant != null) ...[
+                                  const SizedBox(height: AppSpacing.sm),
+                                  _StatusPill(
+                                      available: restaurant.isAvailable),
+                                ],
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ),
                 ),
-                Positioned(
-                  top: MediaQuery.paddingOf(context).top + 8,
-                  left: AppSpacing.md,
-                  child: _CircleAction(
-                    icon: Icons.arrow_back_rounded,
-                    tooltip: 'Back',
-                    // canPop guard: a deep-link reload (web) starts with an
-                    // empty stack, so pop() alone would have nowhere to go.
-                    onPressed: () {
-                      if (context.canPop()) {
-                        context.pop();
-                      } else {
-                        context.go('/restaurants');
+              ),
+
+              // --- Menu body ---
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenPadding,
+                    AppSpacing.xs,
+                    AppSpacing.screenPadding,
+                    AppSpacing.md,
+                  ),
+                  child: Text(
+                    'Menu',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                  ),
+                ),
+              ),
+              if (state.initialLoading)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Shimmer(
+                    child: Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SkeletonListTile(leading: 84),
+                          SizedBox(height: AppSpacing.cardGap),
+                          SkeletonListTile(leading: 84),
+                          SizedBox(height: AppSpacing.cardGap),
+                          SkeletonListTile(leading: 84),
+                          SizedBox(height: AppSpacing.cardGap),
+                          SkeletonListTile(leading: 84),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else if (state.error != null && state.items.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: ErrorState(error: state.error!, onRetry: controller.refresh),
+                )
+              else if (state.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: EmptyState(
+                    icon: Icons.no_food_rounded,
+                    title: 'No menu items yet',
+                    message: 'This restaurant has no items on the menu right now.',
+                    actionLabel: 'Refresh',
+                    onAction: controller.refresh,
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenPadding,
+                    0,
+                    AppSpacing.screenPadding,
+                    AppSpacing.xxl + 96,
+                  ),
+                  sliver: SliverList.separated(
+                    itemCount:
+                        state.items.length + (state.hasMore || state.loadingMore ? 1 : 0),
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(height: AppSpacing.cardGap),
+                    itemBuilder: (context, index) {
+                      if (index >= state.items.length) {
+                        if (state.loadingMore) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+                            child: Center(
+                              child: SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(strokeWidth: 2.4),
+                              ),
+                            ),
+                          );
+                        }
+                        return Center(
+                          child: TextButton.icon(
+                            onPressed: controller.loadMore,
+                            icon: const Icon(Icons.expand_more_rounded),
+                            label: const Text('Load more'),
+                          ),
+                        );
                       }
+                      final item = state.items[index];
+                      return Entrance(
+                        index: index,
+                        child: _MenuRow(
+                          item: item,
+                          inCartQuantity: cart.line(item.id)?.quantity ?? 0,
+                          onTap: () => _openDetail(item),
+                          onAdd: () => _addToCart(item),
+                          onIncrement: () => ref
+                              .read(cartControllerProvider.notifier)
+                              .increment(item.id),
+                          onDecrement: () => ref
+                              .read(cartControllerProvider.notifier)
+                              .decrement(item.id),
+                        ),
+                      );
                     },
                   ),
                 ),
-              ],
-            ),
+            ],
           ),
-          SliverToBoxAdapter(
-            child: Transform.translate(
-              offset: const Offset(0, -46),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        RestaurantAvatar(
-                          name: restaurant?.name ?? 'Menu',
-                          size: 58,
-                        ),
-                        const SizedBox(width: AppSpacing.lg),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                restaurant?.name ?? 'Menu',
-                                style: Theme.of(context).textTheme.titleLarge,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              if (restaurant?.description != null &&
-                                  restaurant!.description!.isNotEmpty) ...[
-                                const SizedBox(height: AppSpacing.xs),
-                                Text(
-                                  restaurant.description!,
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                              if (restaurant != null) ...[
-                                const SizedBox(height: AppSpacing.sm),
-                                Text(
-                                  restaurant.isAvailable
-                                      ? 'Accepting orders'
-                                      : 'Currently closed',
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: restaurant.isAvailable
-                                        ? AppColors.success
-                                        : AppColors.inkSoft,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // --- Menu body ---
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.screenPadding,
-                0,
-                AppSpacing.screenPadding,
-                AppSpacing.sm,
-              ),
-              child: Text('Menu', style: Theme.of(context).textTheme.headlineSmall),
-            ),
-          ),
-          if (state.initialLoading)
-            const SliverFillRemaining(
-              hasScrollBody: false,
-              child: LoadingState(label: 'Loading menu…'),
-            )
-          else if (state.error != null && state.items.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: ErrorState(error: state.error!, onRetry: controller.refresh),
-            )
-          else if (state.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: EmptyState(
-                icon: Icons.no_food_rounded,
-                title: 'No menu items yet',
-                message: 'This restaurant has no items on the menu right now.',
-                actionLabel: 'Refresh',
-                onAction: controller.refresh,
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.screenPadding,
-                0,
-                AppSpacing.screenPadding,
-                AppSpacing.xxl + 96,
-              ),
-              sliver: SliverList.separated(
-                itemCount: state.items.length + (state.hasMore || state.loadingMore ? 1 : 0),
-                separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.cardGap),
-                itemBuilder: (context, index) {
-                  if (index >= state.items.length) {
-                    if (state.loadingMore) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
-                        child: Center(
-                          child: SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2.4),
-                          ),
-                        ),
-                      );
-                    }
-                    return Center(
-                      child: TextButton.icon(
-                        onPressed: controller.loadMore,
-                        icon: const Icon(Icons.expand_more_rounded),
-                        label: const Text('Load more'),
-                      ),
-                    );
-                  }
-                  final item = state.items[index];
-                  return _MenuRow(
-                    item: item,
-                    inCartQuantity: cart.line(item.id)?.quantity ?? 0,
-                    onAdd: () => _addToCart(item),
-                    onIncrement: () =>
-                        ref.read(cartControllerProvider.notifier).increment(item.id),
-                    onDecrement: () =>
-                        ref.read(cartControllerProvider.notifier).decrement(item.id),
-                  );
-                },
-              ),
-            ),
-        ],
+        ),
       ),
 
       // --- Floating cart bar (customers only) ---
@@ -370,6 +378,7 @@ class _MenuRow extends StatelessWidget {
   const _MenuRow({
     required this.item,
     required this.inCartQuantity,
+    required this.onTap,
     required this.onAdd,
     required this.onIncrement,
     required this.onDecrement,
@@ -377,6 +386,7 @@ class _MenuRow extends StatelessWidget {
 
   final MenuItem item;
   final int inCartQuantity;
+  final VoidCallback onTap;
   final VoidCallback onAdd;
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
@@ -385,101 +395,216 @@ class _MenuRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final available = item.isAvailable;
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Opacity(
-        opacity: available ? 1 : 0.6,
-        child: Padding(
+    return Pressable(
+      onTap: onTap,
+      radius: AppSpacing.radiusMd,
+      child: Semantics(
+        button: true,
+        label: '${item.name}, menu item, opens details',
+        child: Container(
+          clipBehavior: Clip.antiAlias,
           padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              FoodImage(itemId: item.id, assetName: item.imageAsset, size: 68),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item.name,
-                            style: text.titleSmall,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (!available)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.sm,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceWarm,
-                              borderRadius:
-                                  BorderRadius.circular(AppSpacing.radiusPill),
-                              border: Border.all(color: AppColors.outlineSoft),
-                            ),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            boxShadow: AppShadow.card,
+          ),
+          child: Opacity(
+            opacity: available ? 1 : 0.62,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FoodImage(itemId: item.id, assetName: item.imageAsset, size: 84),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
                             child: Text(
-                              'Unavailable',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.inkSoft,
+                              item.name,
+                              style: text.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (!available)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceWarm,
+                                borderRadius:
+                                    BorderRadius.circular(AppSpacing.radiusPill),
+                                border: Border.all(color: AppColors.outlineSoft),
+                              ),
+                              child: const Text(
+                                'Unavailable',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.inkSoft,
+                                ),
                               ),
                             ),
-                          ),
+                        ],
+                      ),
+                      if (item.description != null && item.description!.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          item.description!,
+                          style: text.bodySmall
+                              ?.copyWith(color: AppColors.inkSoft),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
-                    ),
-                    if (item.description != null && item.description!.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        item.description!,
-                        style: text.bodySmall,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                      const SizedBox(height: AppSpacing.sm),
+                      Row(
+                        children: [
+                          MoneyText(
+                            item.priceMinor,
+                            currency: item.currency,
+                            style: text.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (available)
+                            inCartQuantity == 0
+                                ? FilledButton(
+                                    onPressed: onAdd,
+                                    style: FilledButton.styleFrom(
+                                      minimumSize: const Size(84, 40),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: AppSpacing.lg,
+                                      ),
+                                      textStyle: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    child: const Text('Add'),
+                                  )
+                                : QuantityStepper(
+                                    quantity: inCartQuantity,
+                                    onIncrement: onIncrement,
+                                    onDecrement: onDecrement,
+                                    dense: true,
+                                  ),
+                        ],
                       ),
                     ],
-                    const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      children: [
-                        MoneyText(
-                          item.priceMinor,
-                          currency: item.currency,
-                          style: text.titleSmall?.copyWith(color: AppColors.primary),
-                        ),
-                        const Spacer(),
-                        if (available)
-                          inCartQuantity == 0
-                              ? FilledButton(
-                                  onPressed: onAdd,
-                                  style: FilledButton.styleFrom(
-                                    minimumSize: const Size(84, 40),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: AppSpacing.lg,
-                                    ),
-                                    textStyle: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  child: const Text('Add'),
-                                )
-                              : QuantityStepper(
-                                  quantity: inCartQuantity,
-                                  onIncrement: onIncrement,
-                                  onDecrement: onDecrement,
-                                  dense: true,
-                                ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MenuHero extends StatelessWidget {
+  const _MenuHero({required this.restaurant});
+
+  final Restaurant? restaurant;
+
+  @override
+  Widget build(BuildContext context) {
+    final restaurant = this.restaurant;
+    final asset = restaurant?.imageAsset;
+    if (restaurant == null) {
+      // Deep link: header resolves asynchronously; branded placeholder.
+      return const ColoredBox(color: AppColors.charcoalSoft);
+    }
+    if (asset != null && asset.isNotEmpty) {
+      return Image.asset(
+        asset,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) =>
+            _HeroInitials(name: restaurant.name),
+      );
+    }
+    return _HeroInitials(name: restaurant.name);
+  }
+}
+
+class _HeroInitials extends StatelessWidget {
+  const _HeroInitials({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return Container(
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.charcoalSoft, AppColors.primaryDeep],
+        ),
+      ),
+      child: Text(
+        initial,
+        style: const TextStyle(
+          fontSize: 72,
+          fontWeight: FontWeight.w800,
+          color: AppColors.onDark,
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.available});
+
+  final bool available;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 5),
+      decoration: BoxDecoration(
+        color: available ? AppColors.successTint : AppColors.surfaceWarm,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: available ? AppColors.success : AppColors.inkFaint,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Flexible + ellipsis: the pill must never force the info card's
+          // column wider than a 360px phone allows.
+          Flexible(
+            child: Text(
+              available ? 'Accepting orders' : 'Currently closed',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: available ? AppColors.success : AppColors.inkSoft,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -504,7 +629,7 @@ class _CircleAction extends StatelessWidget {
       elevation: 2,
       child: IconButton(
         tooltip: tooltip,
-        icon: const Icon(Icons.arrow_back_rounded, color: AppColors.ink),
+        icon: Icon(icon, color: AppColors.ink),
         onPressed: onPressed,
       ),
     );

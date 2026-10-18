@@ -22,27 +22,27 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:quickbite/main.dart' as app;
 
-late final IntegrationTestWidgetsFlutterBinding _binding;
-
 final _dir = Directory('${Directory.systemTemp.path}/m5screens');
 int _shot = 0;
 
-/// Captures the current device screen. Prefers the driver's screenshot
-/// protocol; falls back to signalling a host-side screencap.
+/// Signals a host-side screencap of the current device screen.
+///
+/// The test idles first so the surface finishes compositing the screen's
+/// last change (entrance cascades, transitions): on the SwiftShader emulator,
+/// `adb exec-out screencap` can otherwise read a stale or partially drawn
+/// frame — that race produced blank list bodies and missing labels in early
+/// evidence runs. It then holds the marker for 6 s while the host watcher
+/// (`scripts/watch_android_screens.sh`) takes several frames and keeps the
+/// freshest ones.
 Future<void> _snap(WidgetTester tester, String name) async {
   _shot += 1;
   final prefix = _shot.toString().padLeft(2, '0');
-  try {
-    final bytes = await _binding.takeScreenshot(name);
-    await File('${_dir.path}/${prefix}_$name.png').writeAsBytes(bytes);
-    debugPrint('captured ${prefix}_$name.png (driver)');
-  } catch (err) {
-    final marker = File('${_dir.path}/${prefix}_$name.request');
-    await marker.writeAsString('screencap');
-    await tester.pump(const Duration(milliseconds: 2600));
-    await marker.delete();
-    debugPrint('captured ${prefix}_$name.png (host screencap marker)');
-  }
+  await tester.pump(const Duration(milliseconds: 1200));
+  final marker = File('${_dir.path}/${prefix}_$name.request');
+  await marker.writeAsString('screencap');
+  await tester.pump(const Duration(milliseconds: 6000));
+  await marker.delete();
+  debugPrint('captured ${prefix}_$name.png (host screencap marker)');
 }
 
 /// Bounded wait (never pumpAndSettle — tracking schedules polling frames).
@@ -63,14 +63,26 @@ Future<void> _waitFor(
 }
 
 void main() {
-  _binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('screenshot tour: customer journey + admin overview',
-      (tester) async {
+  testWidgets('screenshot tour: customer journey + admin overview', (
+    tester,
+  ) async {
     _dir.createSync(recursive: true);
     app.main();
 
-    // ---- Login -----------------------------------------------------------
+    // ---- Welcome + login --------------------------------------------------
+    await _waitFor(
+      tester,
+      find.text('Great food, from kitchens near you.'),
+      label: 'welcome screen',
+    );
+    await _snap(tester, 'welcome');
+    final welcomeSignIn = find.widgetWithText(FilledButton, 'Sign in');
+    await tester.ensureVisible(welcomeSignIn);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(welcomeSignIn);
+
     await _waitFor(tester, find.text('Sign In'), label: 'login screen');
     await _snap(tester, 'login');
 
@@ -87,25 +99,48 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Sign In'));
 
     // ---- Catalog ---------------------------------------------------------
-    await _waitFor(tester, find.text('Bella Napoli'),
-        label: 'restaurant list');
+    await _waitFor(tester, find.text('Bella Napoli'), label: 'restaurant list');
     await _snap(tester, 'restaurant_list');
 
     await tester.tap(find.text('Bella Napoli'));
 
-    // ---- Menu + add to cart ----------------------------------------------
+    // ---- Menu + item detail -----------------------------------------------
     await _waitFor(tester, find.text('Add'), label: 'menu items');
     await _snap(tester, 'menu');
-    final addButtons = find.widgetWithText(FilledButton, 'Add');
-    await tester.tap(addButtons.first);
-    await _waitFor(tester, find.textContaining('View cart'),
-        label: 'floating cart bar');
+
+    // The first menu row opens the NEW item detail screen.
+    final firstItemRow = find.text('Margherita Pizza').first;
+    await tester.ensureVisible(firstItemRow);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(firstItemRow);
+    await _waitFor(tester, find.text('Add to cart'), label: 'item detail');
+    await tester.pump(const Duration(milliseconds: 600));
+    await _snap(tester, 'item_detail');
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Add to cart'));
+    await _waitFor(
+      tester,
+      find.text('Added to cart'),
+      label: 'add-to-cart confirmation',
+    );
+    await _snap(tester, 'item_detail_added');
+
+    // Back to the menu — the floating cart bar now shows the line.
+    await tester.tap(find.byTooltip('Back'));
+    await _waitFor(
+      tester,
+      find.textContaining('View cart'),
+      label: 'floating cart bar',
+    );
     await _snap(tester, 'menu_item_added');
 
     // ---- Cart -------------------------------------------------------------
     await tester.tap(find.textContaining('View cart'));
-    await _waitFor(tester, find.text('Proceed to checkout'),
-        label: 'cart screen');
+    await _waitFor(
+      tester,
+      find.text('Proceed to checkout'),
+      label: 'cart screen',
+    );
     await _snap(tester, 'cart');
 
     // ---- Checkout ---------------------------------------------------------
@@ -124,20 +159,30 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Place order'));
 
     // ---- Acceptance (202) -------------------------------------------------
-    await _waitFor(tester, find.text('Order accepted!'),
-        label: 'acceptance', timeout: const Duration(seconds: 30));
+    await _waitFor(
+      tester,
+      find.text('Order accepted!'),
+      label: 'acceptance',
+      timeout: const Duration(seconds: 30),
+    );
     await _snap(tester, 'order_accepted');
 
     // ---- Live tracking (early state, then terminal) -----------------------
     await tester.tap(find.widgetWithText(FilledButton, 'Track this order'));
-    await _waitFor(tester, find.text('Order details'),
-        label: 'tracking screen');
+    await _waitFor(
+      tester,
+      find.text('Order details'),
+      label: 'tracking screen',
+    );
     await tester.pump(const Duration(seconds: 2));
     await _snap(tester, 'tracking_early');
 
-    await _waitFor(tester, find.text('Driver assigned'),
-        label: 'terminal status',
-        timeout: const Duration(seconds: 90));
+    await _waitFor(
+      tester,
+      find.text('Driver assigned'),
+      label: 'terminal status',
+      timeout: const Duration(seconds: 90),
+    );
     await _snap(tester, 'tracking_terminal');
 
     // Notifications sit at the bottom of the scroll view.
@@ -155,17 +200,51 @@ void main() {
         find.text('View order history').evaluate().isNotEmpty) {
       await tester.tap(find.text('View order history'));
     }
-    await _waitFor(tester, find.text('Order history'),
-        label: 'order history');
+    await _waitFor(tester, find.text('Order history'), label: 'order history');
+    // Wait for the first page to actually land (the fetch can take a second
+    // under load) so the shot shows cards, not the data-arrival frame with
+    // entrance fades still at zero.
+    await _waitFor(
+      tester,
+      find.textContaining('Order order_'),
+      label: 'order cards',
+      timeout: const Duration(seconds: 15),
+    );
+    // Let the entrance cascade settle before the snap.
+    await tester.pump(const Duration(milliseconds: 900));
     await _snap(tester, 'order_history');
 
-    // ---- Sign out, then admin overview ------------------------------------
-    await tester.tap(find.byTooltip('Sign out'));
+    // ---- Account tab, sign out, then admin overview -----------------------
+    final accountTab = find.text('Account');
+    await tester.ensureVisible(accountTab);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(accountTab);
+    await _waitFor(tester, find.text('Customer'), label: 'account screen');
+    await _snap(tester, 'account');
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign out'));
     await _waitFor(tester, find.text('Sign out?'), label: 'sign-out dialog');
     await _snap(tester, 'sign_out_dialog');
-    await tester.tap(find.widgetWithText(FilledButton, 'Sign out'));
-    await _waitFor(tester, find.text('Sign In'),
-        label: 'login after sign-out');
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Sign out'),
+      ),
+    );
+    await _waitFor(
+      tester,
+      find.text('Great food, from kitchens near you.'),
+      label: 'welcome after sign-out',
+    );
+    // Let the fade transition fully settle so the landing is captured clean.
+    await tester.pump(const Duration(milliseconds: 800));
+    await _snap(tester, 'welcome_after_signout');
+
+    final adminSignIn = find.widgetWithText(FilledButton, 'Sign in');
+    await tester.ensureVisible(adminSignIn);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(adminSignIn);
+    await _waitFor(tester, find.text('Sign In'), label: 'login for admin');
 
     await tester.enterText(
       find.byType(TextFormField).first,
@@ -179,8 +258,11 @@ void main() {
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Sign In'));
 
-    await _waitFor(tester, find.text('Admin overview'),
-        label: 'admin dashboard');
+    await _waitFor(
+      tester,
+      find.text('Admin overview'),
+      label: 'admin dashboard',
+    );
     await tester.pump(const Duration(seconds: 2));
     await _snap(tester, 'admin_overview');
 

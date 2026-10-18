@@ -14,9 +14,12 @@ import '../../core/utils/datetime.dart';
 import '../../data/dto/order_dto.dart';
 import '../../domain/order_status.dart';
 import '../../state/orders_providers.dart';
+import '../../ui/motion/entrance.dart';
+import '../../ui/motion/shimmer.dart';
 import '../../ui/widgets/async_state_view.dart';
 import '../../ui/widgets/money_text.dart';
 import '../../ui/widgets/paginated_list_view.dart';
+import '../../ui/widgets/pressable.dart';
 import '../../ui/widgets/status_chip.dart';
 import '../shell/app_shell.dart';
 
@@ -58,7 +61,9 @@ class OrderHistoryScreen extends ConsumerWidget {
             height: 44,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenPadding,
+              ),
               itemCount: _filters.length,
               separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
               itemBuilder: (context, index) {
@@ -71,7 +76,9 @@ class OrderHistoryScreen extends ConsumerWidget {
                   labelStyle: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: selected ? AppColors.primary : AppColors.ink,
+                    // White on the coral selection pill (chipTheme's
+                    // selectedColor) — coral-on-coral was invisible.
+                    color: selected ? AppColors.onPrimary : AppColors.ink,
                   ),
                   onSelected: (_) => controller.setFilter(filter),
                 );
@@ -97,7 +104,23 @@ class _Body extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (state.initialLoading) {
-      return const LoadingState(label: 'Loading your orders…');
+      return const Shimmer(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SkeletonListTile(),
+              SizedBox(height: AppSpacing.cardGap),
+              SkeletonListTile(),
+              SizedBox(height: AppSpacing.cardGap),
+              SkeletonListTile(),
+              SizedBox(height: AppSpacing.cardGap),
+              SkeletonListTile(),
+            ],
+          ),
+        ),
+      );
     }
 
     final error = state.error;
@@ -108,7 +131,9 @@ class _Body extends StatelessWidget {
     if (state.isEmpty) {
       return EmptyState(
         icon: Icons.receipt_long_outlined,
-        title: state.filter == null ? 'No orders yet' : 'No ${state.filter!.label.toLowerCase()} orders',
+        title: state.filter == null
+            ? 'No orders yet'
+            : 'No ${state.filter!.label.toLowerCase()} orders',
         message: state.filter == null
             ? 'Orders you place will appear here with live status updates.'
             : 'Try a different status filter.',
@@ -128,9 +153,12 @@ class _Body extends StatelessWidget {
           onLoadMore: controller.loadMore,
           itemBuilder: (context, index) {
             final order = state.items[index];
-            return _OrderCard(
-              order: order,
-              onTap: () => context.push('/orders/${order.id}'),
+            return Entrance(
+              index: index,
+              child: _OrderCard(
+                order: order,
+                onTap: () => context.push('/orders/${order.id}'),
+              ),
             );
           },
         ),
@@ -148,51 +176,69 @@ class _OrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return Semantics(
-      button: true,
-      label: 'Order from ${order.restaurantName}, status ${order.status.label}',
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        order.restaurantName,
-                        style: text.titleSmall,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(formatDateTime(order.createdAt), style: text.bodySmall),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        'Order ${order.id}',
-                        style: text.labelSmall,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+    return Pressable(
+      onTap: onTap,
+      child: Semantics(
+        button: true,
+        label:
+            'Order from ${order.restaurantName}, status ${order.status.label}',
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            boxShadow: AppShadow.card,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    MoneyText(order.totalAmountMinor, currency: order.currency),
-                    const SizedBox(height: AppSpacing.sm),
-                    StatusChip(order.status, compact: true),
+                    Text(
+                      order.restaurantName,
+                      style: text.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      formatDateTime(order.createdAt),
+                      style: text.bodySmall,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'Order ${order.id}',
+                      style: text.labelSmall,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
-                const SizedBox(width: AppSpacing.xs),
-                const Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
-              ],
-            ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  MoneyText(
+                    order.totalAmountMinor,
+                    currency: order.currency,
+                    style: text.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  StatusChip(order.status, compact: true),
+                ],
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.inkFaint,
+              ),
+            ],
           ),
         ),
       ),

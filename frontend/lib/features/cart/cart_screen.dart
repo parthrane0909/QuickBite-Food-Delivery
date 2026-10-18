@@ -13,10 +13,12 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme/app_colors.dart';
 import '../../state/cart_controller.dart';
 import '../../state/checkout_controller.dart';
+import '../../ui/motion/entrance.dart';
 import '../../ui/widgets/app_banner.dart';
 import '../../ui/widgets/async_state_view.dart';
 import '../../ui/widgets/food_image.dart';
 import '../../ui/widgets/money_text.dart';
+import '../../ui/widgets/primary_button.dart';
 import '../../ui/widgets/section_header.dart';
 import 'widgets/cart_line_tile.dart';
 
@@ -90,69 +92,94 @@ class CartScreen extends ConsumerWidget {
                     ],
 
                     // Selected restaurant
-                    Card(
-                      child: ListTile(
-                        leading: RestaurantAvatar(
-                          name: cart.restaurantName ?? 'Restaurant',
-                          size: 42,
-                        ),
-                        title: Text(
-                          cart.restaurantName ?? '',
-                          style: text.titleSmall,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          'All cart items must be from one restaurant',
-                          style: text.bodySmall,
+                    Entrance(
+                      index: 0,
+                      child: Card(
+                        child: ListTile(
+                          leading: RestaurantAvatar(
+                            name: cart.restaurantName ?? 'Restaurant',
+                            size: 42,
+                          ),
+                          title: Text(
+                            cart.restaurantName ?? '',
+                            style: text.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            'All cart items must be from one restaurant',
+                            style: text.bodySmall,
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
 
                     const SectionHeader('Items'),
-                    for (final line in cart.lines) ...[
-                      CartLineTile(
-                        line: line,
-                        onIncrement: () => controller.increment(line.menuItemId),
-                        onDecrement: () => controller.decrement(line.menuItemId),
-                        onRemove: () => controller.remove(line.menuItemId),
+                    for (var i = 0; i < cart.lines.length; i++) ...[
+                      Entrance(
+                        index: i + 1,
+                        child: CartLineTile(
+                          line: cart.lines[i],
+                          onIncrement: () =>
+                              controller.increment(cart.lines[i].menuItemId),
+                          onDecrement: () =>
+                              controller.decrement(cart.lines[i].menuItemId),
+                          onRemove: () =>
+                              controller.remove(cart.lines[i].menuItemId),
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.cardGap),
                     ],
 
                     const SizedBox(height: AppSpacing.sm),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('Subtotal', style: text.bodyLarge),
-                                MoneyText(
-                                  cart.subtotalMinor,
-                                  currency: cart.currency,
-                                  style: text.titleMedium,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: AppSpacing.sm),
-                            Text(
-                              'Preview only — the server computes your final '
-                              'order total at checkout.',
-                              style: text.bodySmall,
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
+                    Entrance(
+                      index: (cart.lines.length + 1).clamp(0, 6),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Subtotal',
+                                    style: text.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  MoneyText(
+                                    cart.subtotalMinor,
+                                    currency: cart.currency,
+                                    style: text.titleLarge?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              Text(
+                                'Preview only — the server computes your final '
+                                'order total at checkout.',
+                                style: text.bodySmall
+                                    ?.copyWith(color: AppColors.inkSoft),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(height: AppSpacing.xl),
 
-                    FilledButton(
-                      onPressed: () => context.push('/checkout'),
-                      child: const Text('Proceed to checkout'),
+                    Entrance(
+                      index: (cart.lines.length + 2).clamp(0, 6),
+                      child: PrimaryButton(
+                        label: 'Proceed to checkout',
+                        onPressed: () => context.push('/checkout'),
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                   ],

@@ -26,6 +26,8 @@ import '../../app/theme/app_colors.dart';
 import '../../core/utils/datetime.dart';
 import '../../state/auth_controller.dart';
 import '../../state/orders_providers.dart';
+import '../../ui/motion/entrance.dart';
+import '../../ui/motion/shimmer.dart';
 import '../../ui/widgets/app_banner.dart';
 import '../../ui/widgets/async_state_view.dart';
 import '../../ui/widgets/money_text.dart';
@@ -41,7 +43,8 @@ class OrderTrackingScreen extends ConsumerStatefulWidget {
   final String orderId;
 
   @override
-  ConsumerState<OrderTrackingScreen> createState() => _OrderTrackingScreenState();
+  ConsumerState<OrderTrackingScreen> createState() =>
+      _OrderTrackingScreenState();
 }
 
 class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen>
@@ -88,10 +91,15 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen>
   }
 
   Duration get _currentInterval {
-    final errors = ref.read(orderWatchProvider(widget.orderId)).consecutiveErrors;
+    final errors = ref
+        .read(orderWatchProvider(widget.orderId))
+        .consecutiveErrors;
     if (errors <= 0) return _basePollInterval;
-    final backoffMs = _basePollInterval.inMilliseconds * (1 << math.min(errors, 4));
-    return Duration(milliseconds: math.min(backoffMs, _maxPollInterval.inMilliseconds));
+    final backoffMs =
+        _basePollInterval.inMilliseconds * (1 << math.min(errors, 4));
+    return Duration(
+      milliseconds: math.min(backoffMs, _maxPollInterval.inMilliseconds),
+    );
   }
 
   void _scheduleNext() {
@@ -119,16 +127,16 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen>
   /// the order history. Falls back to the history branch (admins are then
   /// redirected to /admin by the router).
   Widget _backButton() => IconButton(
-        tooltip: 'Back',
-        icon: const Icon(Icons.arrow_back_rounded),
-        onPressed: () {
-          if (context.canPop()) {
-            context.pop();
-          } else {
-            context.go('/orders');
-          }
-        },
-      );
+    tooltip: 'Back',
+    icon: const Icon(Icons.arrow_back_rounded),
+    onPressed: () {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/orders');
+      }
+    },
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -150,7 +158,21 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen>
           leading: _backButton(),
           title: const Text('Order details'),
         ),
-        body: const LoadingState(label: 'Loading order…'),
+        body: const Shimmer(
+          child: Padding(
+            padding: EdgeInsets.all(AppSpacing.screenPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SkeletonBox(height: 120, radius: AppSpacing.radiusLg),
+                SizedBox(height: AppSpacing.cardGap),
+                SkeletonBox(height: 220, radius: AppSpacing.radiusLg),
+                SizedBox(height: AppSpacing.cardGap),
+                SkeletonBox(height: 180, radius: AppSpacing.radiusLg),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -170,13 +192,20 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen>
 
     final wide = MediaQuery.sizeOf(context).width >= 1000;
 
-    final statusCard = _StatusCard(watch: watch, onRefresh: _manualRefresh);
-    final timelineCard = _TimelineCard(watch: watch);
-    final detailsCard = _DetailsCard(watch: watch);
-    final notificationsCard = _NotificationsCard(
-      watch: watch,
-      onLoadMore: () =>
-          ref.read(orderWatchProvider(widget.orderId).notifier).loadMoreNotifications(),
+    final statusCard = Entrance(
+      index: 0,
+      child: _StatusCard(watch: watch, onRefresh: _manualRefresh),
+    );
+    final timelineCard = Entrance(index: 1, child: _TimelineCard(watch: watch));
+    final detailsCard = Entrance(index: 2, child: _DetailsCard(watch: watch));
+    final notificationsCard = Entrance(
+      index: 3,
+      child: _NotificationsCard(
+        watch: watch,
+        onLoadMore: () => ref
+            .read(orderWatchProvider(widget.orderId).notifier)
+            .loadMoreNotifications(),
+      ),
     );
 
     return Scaffold(
@@ -202,7 +231,9 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen>
         onRefresh: _manualRefresh,
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: AppSpacing.desktopMaxWidth),
+            constraints: const BoxConstraints(
+              maxWidth: AppSpacing.desktopMaxWidth,
+            ),
             child: ListView(
               padding: const EdgeInsets.all(AppSpacing.screenPadding),
               children: [
@@ -221,14 +252,22 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen>
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [statusCard, const SizedBox(height: AppSpacing.cardGap), timelineCard],
+                          children: [
+                            statusCard,
+                            const SizedBox(height: AppSpacing.cardGap),
+                            timelineCard,
+                          ],
                         ),
                       ),
                       const SizedBox(width: AppSpacing.cardGap),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [detailsCard, const SizedBox(height: AppSpacing.cardGap), notificationsCard],
+                          children: [
+                            detailsCard,
+                            const SizedBox(height: AppSpacing.cardGap),
+                            notificationsCard,
+                          ],
                         ),
                       ),
                     ],
@@ -286,18 +325,36 @@ class _StatusCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(order.restaurantName, style: text.titleLarge, overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    order.restaurantName,
+                    style: text.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 StatusChip(order.status),
               ],
             ),
             const SizedBox(height: AppSpacing.sm),
-            Text('Order ${order.id}', style: text.bodySmall, overflow: TextOverflow.ellipsis),
+            Text(
+              'Order ${order.id}',
+              style: text.bodySmall,
+              overflow: TextOverflow.ellipsis,
+            ),
             if (watch.lastRefreshAt != null) ...[
               const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Updated ${formatTime(watch.lastRefreshAt!.toLocal())}',
-                style: text.labelSmall,
+              Row(
+                children: [
+                  if (!watch.isTerminal) ...[
+                    const LivePulse(color: AppColors.primary),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(
+                    'Updated ${formatTime(watch.lastRefreshAt!.toLocal())}',
+                    style: text.labelSmall,
+                  ),
+                ],
               ),
             ],
             const SizedBox(height: AppSpacing.md),
@@ -305,19 +362,22 @@ class _StatusCard extends StatelessWidget {
               const AppBanner(
                 kind: AppBannerKind.success,
                 icon: Icons.two_wheeler_rounded,
-                message: 'A driver has been assigned — this is the final state '
+                message:
+                    'A driver has been assigned — this is the final state '
                     'of the QuickBite delivery flow.',
               )
             else if (order.status.isFailure)
               AppBanner(
                 kind: AppBannerKind.danger,
-                message: order.failureReason ??
+                message:
+                    order.failureReason ??
                     'This order failed${order.failureCode != null ? ' (${order.failureCode})' : ''}.',
               )
             else if (!watch.isTerminal)
               AppBanner(
                 kind: AppBannerKind.info,
-                message: 'Processing — we will update this screen automatically.',
+                message:
+                    'Processing — we will update this screen automatically.',
               ),
             if (order.status.isTerminal && !order.status.isSuccess) ...[
               const SizedBox(height: AppSpacing.md),
@@ -351,7 +411,10 @@ class _TimelineCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Status history', style: text.titleMedium),
+            Text(
+              'Status history',
+              style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: AppSpacing.lg),
             if (history.isEmpty)
               Text('No transitions recorded yet.', style: text.bodySmall)
@@ -371,17 +434,26 @@ class _TimelineCard extends StatelessWidget {
                                 ? AppColors.primary
                                 : AppColors.primaryTint,
                             shape: BoxShape.circle,
-                            border: Border.all(color: AppColors.primary, width: 2),
+                            border: Border.all(
+                              color: AppColors.primary,
+                              width: 2,
+                            ),
                           ),
                         ),
                         if (i != history.length - 1)
-                          Container(width: 2, height: 44, color: AppColors.outlineSoft),
+                          Container(
+                            width: 2,
+                            height: 44,
+                            color: AppColors.outlineSoft,
+                          ),
                       ],
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Padding(
-                        padding: EdgeInsets.only(bottom: i == history.length - 1 ? 0 : AppSpacing.lg),
+                        padding: EdgeInsets.only(
+                          bottom: i == history.length - 1 ? 0 : AppSpacing.lg,
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -390,10 +462,15 @@ class _TimelineCard extends StatelessWidget {
                                 Expanded(
                                   child: Text(
                                     history[i].status.label,
-                                    style: text.titleSmall,
+                                    style: text.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
-                                Text('v${history[i].version}', style: text.labelSmall),
+                                Text(
+                                  'v${history[i].version}',
+                                  style: text.labelSmall,
+                                ),
                               ],
                             ),
                             Text(
@@ -409,7 +486,10 @@ class _TimelineCard extends StatelessWidget {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            Text('Source: ${history[i].source}', style: text.labelSmall),
+                            Text(
+                              'Source: ${history[i].source}',
+                              style: text.labelSmall,
+                            ),
                           ],
                         ),
                       ),
@@ -442,7 +522,10 @@ class _DetailsCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Order summary', style: text.titleMedium),
+            Text(
+              'Order summary',
+              style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: AppSpacing.md),
             for (final line in order.items)
               Padding(
@@ -459,7 +542,9 @@ class _DetailsCard extends StatelessWidget {
                     MoneyText(
                       line.lineTotalMinor,
                       currency: line.currency,
-                      style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                      style: text.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -468,8 +553,18 @@ class _DetailsCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Order total', style: text.titleSmall),
-                MoneyText(order.totalAmountMinor, currency: order.currency, style: text.titleMedium),
+                Text(
+                  'Order total',
+                  style: text.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                MoneyText(
+                  order.totalAmountMinor,
+                  currency: order.currency,
+                  style: text.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -488,7 +583,10 @@ class _DetailsCard extends StatelessWidget {
             ],
             if (order.failureReason != null) ...[
               const SizedBox(height: AppSpacing.md),
-              AppBanner(kind: AppBannerKind.danger, message: order.failureReason!),
+              AppBanner(
+                kind: AppBannerKind.danger,
+                message: order.failureReason!,
+              ),
             ],
           ],
         ),
@@ -500,15 +598,15 @@ class _DetailsCard extends StatelessWidget {
 // ---------------------------- notifications --------------------------------
 
 IconData _notificationIcon(String type) => switch (type) {
-      'order.created' => Icons.receipt_long_rounded,
-      'payment.captured' => Icons.payments_rounded,
-      'payment.failed' => Icons.credit_card_off_rounded,
-      'restaurant.confirmed' => Icons.task_alt_rounded,
-      'restaurant.rejected' => Icons.cancel_outlined,
-      'driver.assigned' => Icons.two_wheeler_rounded,
-      'notification.failed' => Icons.notifications_off_outlined,
-      _ => Icons.notifications_outlined,
-    };
+  'order.created' => Icons.receipt_long_rounded,
+  'payment.captured' => Icons.payments_rounded,
+  'payment.failed' => Icons.credit_card_off_rounded,
+  'restaurant.confirmed' => Icons.task_alt_rounded,
+  'restaurant.rejected' => Icons.cancel_outlined,
+  'driver.assigned' => Icons.two_wheeler_rounded,
+  'notification.failed' => Icons.notifications_off_outlined,
+  _ => Icons.notifications_outlined,
+};
 
 class _NotificationsCard extends StatelessWidget {
   const _NotificationsCard({required this.watch, required this.onLoadMore});
@@ -564,7 +662,9 @@ class _NotificationsCard extends StatelessWidget {
                         child: Icon(
                           _notificationIcon(entry.type),
                           size: 17,
-                          color: entry.isFailure ? AppColors.danger : AppColors.primary,
+                          color: entry.isFailure
+                              ? AppColors.danger
+                              : AppColors.primary,
                         ),
                       ),
                       const SizedBox(width: AppSpacing.md),
@@ -601,7 +701,9 @@ class _NotificationsCard extends StatelessWidget {
                 child: TextButton.icon(
                   onPressed: onLoadMore,
                   icon: const Icon(Icons.expand_more_rounded),
-                  label: Text('Load more (${feed.total - feed.items.length} more)'),
+                  label: Text(
+                    'Load more (${feed.total - feed.items.length} more)',
+                  ),
                 ),
               ),
           ],
@@ -612,12 +714,12 @@ class _NotificationsCard extends StatelessWidget {
 }
 
 String _typeLabel(String type) => switch (type) {
-      'order.created' => 'Order created',
-      'payment.captured' => 'Payment captured',
-      'payment.failed' => 'Payment failed',
-      'restaurant.confirmed' => 'Restaurant confirmed',
-      'restaurant.rejected' => 'Restaurant rejected',
-      'driver.assigned' => 'Driver assigned',
-      'notification.failed' => 'Notification issue',
-      _ => type,
-    };
+  'order.created' => 'Order created',
+  'payment.captured' => 'Payment captured',
+  'payment.failed' => 'Payment failed',
+  'restaurant.confirmed' => 'Restaurant confirmed',
+  'restaurant.rejected' => 'Restaurant rejected',
+  'driver.assigned' => 'Driver assigned',
+  'notification.failed' => 'Notification issue',
+  _ => type,
+};

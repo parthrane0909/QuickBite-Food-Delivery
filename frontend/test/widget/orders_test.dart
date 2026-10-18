@@ -6,6 +6,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quickbite/app/theme/app_colors.dart';
 import 'package:quickbite/core/network/api_exception.dart';
 import 'package:quickbite/domain/order_status.dart';
 
@@ -17,27 +18,30 @@ void main() {
   setUp(resetPrefs);
 
   group('Acknowledgement', () {
-    testWidgets('deep-linked ack without acceptance state forwards to tracking',
-        (tester) async {
-      final backend = TestBackend();
-      await backend.signIn();
-      backend.orders.detail = fixtureOrderDetail();
+    testWidgets(
+      'deep-linked ack without acceptance state forwards to tracking',
+      (tester) async {
+        final backend = TestBackend();
+        await backend.signIn();
+        backend.orders.detail = fixtureOrderDetail();
 
-      await pumpApp(tester, backend, route: '/orders/order-1/accepted');
-      await tester.pump();
-      await tester.pump();
+        await pumpApp(tester, backend, route: '/orders/order-1/accepted');
+        await tester.pump();
+        await tester.pump();
 
-      // The acceptance payload is in-memory only (never persisted): the
-      // screen hands off to the live tracking view.
-      expect(find.text('Order accepted!'), findsNothing);
-      expect(find.text('Order details'), findsOneWidget);
-      await unmountApp(tester);
-    });
+        // The acceptance payload is in-memory only (never persisted): the
+        // screen hands off to the live tracking view.
+        expect(find.text('Order accepted!'), findsNothing);
+        expect(find.text('Order details'), findsOneWidget);
+        await unmountApp(tester);
+      },
+    );
   });
 
   group('Live tracking', () {
-    testWidgets('polls every 2 seconds and stops at the terminal state',
-        (tester) async {
+    testWidgets('polls every 2 seconds and stops at the terminal state', (
+      tester,
+    ) async {
       final backend = TestBackend();
       await backend.signIn();
       backend.orders.detail = fixtureOrderDetail(status: OrderStatus.pending);
@@ -53,7 +57,11 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(backend.orders.orderCalls, 1, reason: 'initial authoritative load');
+      expect(
+        backend.orders.orderCalls,
+        1,
+        reason: 'initial authoritative load',
+      );
       expect(find.text('Pending'), findsWidgets);
       expect(
         find.textContaining('Polling every 2s'),
@@ -67,8 +75,9 @@ void main() {
       expect(backend.orders.orderCalls, 2);
 
       // Server advances to the successful terminal state.
-      backend.orders.detail =
-          fixtureOrderDetail(status: OrderStatus.driverAssigned);
+      backend.orders.detail = fixtureOrderDetail(
+        status: OrderStatus.driverAssigned,
+      );
       await tester.pump(const Duration(seconds: 2));
       await tester.pump();
       expect(backend.orders.orderCalls, 3);
@@ -88,8 +97,9 @@ void main() {
       await unmountApp(tester);
     });
 
-    testWidgets('polling backs off exponentially while errors persist',
-        (tester) async {
+    testWidgets('polling backs off exponentially while errors persist', (
+      tester,
+    ) async {
       final backend = TestBackend();
       await backend.signIn();
       backend.orders.detail = fixtureOrderDetail(status: OrderStatus.pending);
@@ -122,8 +132,9 @@ void main() {
       await unmountApp(tester);
     });
 
-    testWidgets('a failed order surfaces the server failure reason',
-        (tester) async {
+    testWidgets('a failed order surfaces the server failure reason', (
+      tester,
+    ) async {
       final backend = TestBackend();
       await backend.signIn();
       backend.orders.detail = fixtureOrderDetail(
@@ -164,8 +175,11 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 2));
       await tester.pump();
-      expect(backend.orders.orderCalls, callsBeforeStop + 1,
-          reason: 'terminal stops polling');
+      expect(
+        backend.orders.orderCalls,
+        callsBeforeStop + 1,
+        reason: 'terminal stops polling',
+      );
       await unmountApp(tester);
     });
 
@@ -210,8 +224,9 @@ void main() {
   });
 
   group('Order history', () {
-    testWidgets('lists the customer orders and applies the status filter',
-        (tester) async {
+    testWidgets('lists the customer orders and applies the status filter', (
+      tester,
+    ) async {
       final backend = TestBackend()
         ..orders.orderList = [
           fixtureOrderSummary(id: 'order-1', status: OrderStatus.pending),
@@ -241,8 +256,48 @@ void main() {
       expect(find.text('Bella Napoli'), findsNothing);
     });
 
-    testWidgets('shows the empty state when no orders were placed',
-        (tester) async {
+    testWidgets('selected filter chip label contrasts with its pill', (
+      tester,
+    ) async {
+      final backend = TestBackend()
+        ..orders.orderList = [
+          fixtureOrderSummary(id: 'order-1', status: OrderStatus.confirmed),
+        ];
+      await backend.signIn();
+      await pumpApp(tester, backend, route: '/orders');
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Confirmed'));
+      await tester.pump();
+      await tester.pump();
+
+      // Regression: the selected chip's label used to be coral-on-coral
+      // (chipTheme.selectedColor) — invisible on every platform.
+      final theme = Theme.of(
+        tester.element(find.widgetWithText(ChoiceChip, 'Confirmed')),
+      );
+      final selected = tester.widget<ChoiceChip>(
+        find.widgetWithText(ChoiceChip, 'Confirmed'),
+      );
+      expect(selected.selected, isTrue);
+      expect(selected.labelStyle?.color, equals(AppColors.onPrimary));
+      expect(
+        selected.labelStyle?.color,
+        isNot(equals(theme.chipTheme.selectedColor)),
+      );
+
+      // Unselected chips keep the normal ink label.
+      final all = tester.widget<ChoiceChip>(
+        find.widgetWithText(ChoiceChip, 'All'),
+      );
+      expect(all.selected, isFalse);
+      expect(all.labelStyle?.color, equals(AppColors.ink));
+    });
+
+    testWidgets('shows the empty state when no orders were placed', (
+      tester,
+    ) async {
       final backend = TestBackend();
       await backend.signIn();
       await pumpApp(tester, backend, route: '/orders');

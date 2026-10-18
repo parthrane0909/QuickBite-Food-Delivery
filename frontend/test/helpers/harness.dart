@@ -46,11 +46,29 @@ Future<ProviderContainer> pumpApp(
     );
     container.read(appRouterProvider).go(route);
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
   }
   return ProviderScope.containerOf(
     tester.element(find.byType(QuickBiteApp)),
     listen: false,
   );
+}
+
+/// Navigate to [route] and let GoRouter's asynchronous parse/redirect/page
+/// build actually land. A bare `go()` + single pump can sample the frame
+/// BEFORE the destination page exists (router parsing is async), so tests
+/// use this instead of calling `go()` directly.
+Future<void> navTo(WidgetTester tester, String route) async {
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(QuickBiteApp)),
+    listen: false,
+  );
+  container.read(appRouterProvider).go(route);
+  await tester.pump();
+  // One elapsed-time pump completes the page transition (<=300ms) and the
+  // staggered entrance timers (<=600ms), so the previous route is fully
+  // gone before assertions run.
+  await tester.pump(const Duration(milliseconds: 700));
 }
 
 /// Let the splash -> auth-restore -> redirect chain resolve. Never uses
