@@ -34,7 +34,7 @@ The preserved development database now contains:
 | Menu items | 19,992 |
 | Menu items per restaurant | 8–10 |
 | Users | 4 |
-| Orders | 44 |
+| Orders | 45 (including the Android release verification order below) |
 | Drivers | 6 |
 | Alembic head | `0004` |
 
@@ -94,16 +94,27 @@ claim live GPS coordinates.
 | Current Compose deployment | API readiness reports PostgreSQL and RabbitMQ up; authenticated catalogue search and admin summary passed; nginx returns HTTP 200 for SPA routes; final catalogue counts and migration head rechecked (`compose-final-runtime.txt`) |
 | Chrome mobile-web authentication | Passed: seeded customer sign-in reached live discovery at 393×852 (`web-interactive-smoke.txt`) |
 | Source API search/categories | Ready; 16 cuisine values, dish-name and combined cuisine/search requests return 200 (`http-routes-final.txt`) |
-| Android release APK | Not built; Gradle fails on Flutter SDK `integration_test` generated plugin registration (`android-release-build.txt`) |
+| Android release APK | Passed: Flutter regenerated the stale plugin registrant during normal dependency resolution; release APK built, signature-verified and installed in place on physical CPH2793 (`android-release-build-final.txt`, `android-release-runtime-final.txt`) |
 
-The Android integration flow used the real source API, PostgreSQL catalogue,
-and seeded accounts. It covered welcome, sign-in, restaurant search, menu,
-dish details, cart, checkout route, history, sign-out, admin dashboard,
-restaurant/menu lists, customer order inspection, admin shopping mode, and
-return to the admin dashboard. It intentionally did not place an order or save
-admin changes. Backend integration tests cover
-management mutations and authorization. A physical Android device was not
-connected.
+The earlier emulator integration flow used the real API, PostgreSQL catalogue,
+and seeded accounts. The final release was then installed on the connected
+physical CPH2793 (Android 16) with `adb install -r`, preserving the existing
+application data. Using the USB reverse tunnel (`adb reverse tcp:8000 tcp:8000`)
+and local FastAPI endpoint, the app authenticated, loaded the catalogue and
+images, opened a restaurant and menu, added two items, accepted one real test
+order, and displayed its tracking progress and order-history record. The
+persisted order is `order_c0948ac9d1ae42fdb4d375870b653764`, total 47,000 INR
+minor units, current state `DRIVER_ASSIGNED`; four persisted notifications
+cover order creation, payment, restaurant confirmation, and driver assignment.
+The journey screenshot is `after-android/release-final-orders-physical.png`.
+
+On the same physical release build, admin sign-in, the live dashboard,
+restaurant listing, customer shopping navigation, and final discovery screen
+were exercised. The admin editor was opened and canceled without saving a
+change; the full admin mutation journey was not repeated on device. Management
+mutation and authorization remain covered by backend tests and prior API
+evidence. The final category-card presentation and admin Home destination were
+also checked on device.
 
 M2–M5 contain prior assignment evidence, including idempotent checkout,
 concurrency, owner-only reads, worker crash recovery, broker restart recovery,
@@ -129,14 +140,49 @@ attempt, the API image rebuild succeeded; only the API and nginx services were
 recreated, and the API readiness check reports PostgreSQL and RabbitMQ up.
 Nginx returned HTTP 200 for the root, login, and admin SPA paths. The full
 menu-to-checkout browser journey remains unverified because Python Playwright
-is not installed. The Android real-API journey and Flutter responsive widget
-tests passed. No Docker volume, database, or unrelated container was removed
-or reset.
+is not installed. The physical Android release journey used the active USB
+reverse tunnel to reach the local API; the APK is not configured for standalone
+Wi-Fi/deployed access and needs a reachable HTTPS API URL for that use. No
+Docker volume, database, or unrelated container was removed or reset.
 
 `frontend/ios/` and macOS/Xcode are unavailable on this Linux host, so iOS
-builds and simulator tests remain unverified. No physical Android device was
-available. Android release APK generation also remains blocked by the
-generated `integration_test` plugin registration; debug APK/runtime passed.
+builds and simulator tests remain unverified. The Android release APK uses the
+repository's debug signing certificate: it is installable for internal review,
+but not store-ready. Store distribution needs a protected upload key. The
+physical-device verification used the local API over ADB reverse; deployed
+networking remains unverified.
+
+## Final Android release artifact
+
+- APK: `frontend/build/app/outputs/flutter-apk/app-release.apk` (71.4 MB).
+- SHA-256: `830309bebb7960e53e4fa6dbae828c67ed6fe8d3ed06a32094380a2b7daaf01c`.
+- Package/version: `dev.quickbite.quickbite`, version `1.0.0` (code 1).
+- Android: min SDK 24, compile/target SDK 36; merged manifest includes
+  `android.permission.INTERNET`.
+- Signing: APK signature v2 verified with the Android Debug certificate. This
+  is a release-mode internal test APK, not a production/store-signed artifact.
+- API: built with `--dart-define=API_BASE_URL=http://localhost:8000/api/v1`.
+  For USB-local testing, start the project API and run
+  `adb reverse tcp:8000 tcp:8000`; for independent use, rebuild with a reachable
+  HTTPS endpoint.
+- Build command from `frontend/`:
+  `flutter build apk --release --dart-define=API_BASE_URL=http://localhost:8000/api/v1`.
+- Installation: `adb install -r frontend/build/app/outputs/flutter-apk/app-release.apk`.
+
+The initial failure came from a stale generated plugin registrant referencing
+the SDK `integration_test` plugin during release compilation. Normal Flutter
+dependency resolution regenerated plugin registration without that test-only
+entry; the release build then succeeded. No generated source was hand-edited,
+no test dependency was removed, and `flutter clean` was not needed. Final
+analysis output is saved in `flutter-analyze-release-final.txt`.
+
+The focused Flutter regression run covered admin navigation, catalogue cards,
+and checkout history invalidation (34 tests; `flutter-targeted-run.txt`); all
+passed. Flutter analysis is clean. The previous full Flutter run (93 tests) and backend run
+(145 passed, one skipped) predate these presentation-only edits; complete
+suites were not repeated because backend sources were unchanged. The earlier
+400-order scaling evidence remains applicable; this task did not change
+checkout or worker behavior.
 
 Web screenshots and the full Android contact sheet are available from
 `index.html`. Local development credentials are documented in the project

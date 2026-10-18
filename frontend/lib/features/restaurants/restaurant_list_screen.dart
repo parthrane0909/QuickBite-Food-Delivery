@@ -13,6 +13,7 @@ import '../../ui/layout/adaptive_layout.dart';
 import '../../ui/motion/entrance.dart';
 import '../../ui/motion/shimmer.dart';
 import '../../ui/widgets/async_state_view.dart';
+import 'widgets/food_category_card.dart';
 import 'widgets/restaurant_card.dart';
 
 class RestaurantListScreen extends ConsumerStatefulWidget {
@@ -24,16 +25,53 @@ class RestaurantListScreen extends ConsumerStatefulWidget {
 
 class _RestaurantListScreenState extends ConsumerState<RestaurantListScreen> {
   final _scroll = ScrollController();
+  final _cuisineScroll = ScrollController();
   final _restaurantsKey = GlobalKey();
   final _search = TextEditingController();
   final _cuisineKeys = <String, GlobalKey>{};
   Timer? _searchDebounce;
+  Timer? _categoryAutoTimer;
+  bool _categoryAutoScheduled = false;
+  bool _categoryAutoPaused = false;
   @override
   void dispose() {
     _scroll.dispose();
+    _cuisineScroll.dispose();
     _searchDebounce?.cancel();
+    _categoryAutoTimer?.cancel();
     _search.dispose();
     super.dispose();
+  }
+
+  void _scheduleCategoryAutoScroll(int cuisineCount) {
+    if (_categoryAutoScheduled || _categoryAutoPaused || cuisineCount < 4) {
+      return;
+    }
+    if (MediaQuery.disableAnimationsOf(context)) return;
+    _categoryAutoScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_cuisineScroll.hasClients || _categoryAutoPaused) {
+        return;
+      }
+      // A single tiny nudge hints that the rail scrolls, while keeping the
+      // selected leading card almost fully visible. Any touch cancels it.
+      _categoryAutoTimer = Timer(const Duration(seconds: 3), () {
+        if (!mounted || !_cuisineScroll.hasClients || _categoryAutoPaused) {
+          return;
+        }
+        final position = _cuisineScroll.position;
+        position.animateTo(
+          (position.pixels + 18).clamp(0.0, position.maxScrollExtent),
+          duration: const Duration(milliseconds: 900),
+          curve: Curves.easeInOut,
+        );
+      });
+    });
+  }
+
+  void _pauseCategoryAutoScroll() {
+    _categoryAutoPaused = true;
+    _categoryAutoTimer?.cancel();
   }
 
   void _explore() {
@@ -66,6 +104,7 @@ class _RestaurantListScreenState extends ConsumerState<RestaurantListScreen> {
       error: (_, _) => fallbackCuisines,
       loading: () => fallbackCuisines,
     );
+    _scheduleCategoryAutoScroll(cuisines.length);
     final auth = ref.watch(authControllerProvider);
     final cart = ref.watch(cartControllerProvider);
     return Scaffold(
@@ -158,62 +197,78 @@ class _RestaurantListScreenState extends ConsumerState<RestaurantListScreen> {
                   ),
                   if (state.items.isNotEmpty)
                     SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: 52,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          children: [
-                            ChoiceChip(
-                              label: const Text('All cuisines'),
-                              selected: state.selectedCuisine == null,
-                              onSelected: (_) =>
-                                  controller.filterByCuisine(null),
-                            ),
-                            const SizedBox(width: 8),
-                            for (final cuisine in cuisines) ...[
-                              Builder(
-                                builder: (context) {
-                                  final key = _cuisineKeys.putIfAbsent(
-                                    cuisine,
+                      child: Listener(
+                        onPointerDown: (_) => _pauseCategoryAutoScroll(),
+                        child: SizedBox(
+                          height: 104,
+                          child: SingleChildScrollView(
+                            controller: _cuisineScroll,
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Row(
+                              children: [
+                                Padding(
+                                  key: _cuisineKeys.putIfAbsent(
+                                    'All cuisines',
                                     GlobalKey.new,
-                                  );
-                                  return Padding(
-                                    key: key,
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: ChoiceChip(
-                                      label: Text(cuisine),
-                                      selected:
-                                          state.selectedCuisine == cuisine,
-                                      onSelected: (_) async {
-                                        await controller.filterByCuisine(
-                                          state.selectedCuisine == cuisine
-                                              ? null
-                                              : cuisine,
-                                        );
-                                        if (!context.mounted) return;
-                                        final target = key.currentContext;
-                                        if (target == null) return;
-                                        Scrollable.ensureVisible(
-                                          target,
-                                          alignment: 0.06,
-                                          duration:
-                                              MediaQuery.disableAnimationsOf(
-                                                context,
-                                              )
-                                              ? Duration.zero
-                                              : const Duration(
-                                                  milliseconds: 260,
-                                                ),
-                                          curve: Curves.easeOutCubic,
-                                        );
-                                      },
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ],
+                                  ),
+                                  padding: const EdgeInsets.only(right: 9),
+                                  child: FoodCategoryCard(
+                                    label: 'All',
+                                    asset:
+                                        'assets/food/family_north_indian.jpg',
+                                    selected: state.selectedCuisine == null,
+                                    onTap: () =>
+                                        controller.filterByCuisine(null),
+                                  ),
+                                ),
+                                for (final cuisine in cuisines)
+                                  Builder(
+                                    builder: (context) {
+                                      final key = _cuisineKeys.putIfAbsent(
+                                        cuisine,
+                                        GlobalKey.new,
+                                      );
+                                      return Padding(
+                                        key: key,
+                                        padding: const EdgeInsets.only(
+                                          right: 9,
+                                        ),
+                                        child: FoodCategoryCard(
+                                          label: cuisine,
+                                          asset: cuisineImageAsset(cuisine),
+                                          selected:
+                                              state.selectedCuisine == cuisine,
+                                          onTap: () async {
+                                            await controller.filterByCuisine(
+                                              state.selectedCuisine == cuisine
+                                                  ? null
+                                                  : cuisine,
+                                            );
+                                            if (!context.mounted) return;
+                                            final target = key.currentContext;
+                                            if (target == null) return;
+                                            Scrollable.ensureVisible(
+                                              target,
+                                              alignment: 0.02,
+                                              duration:
+                                                  MediaQuery.disableAnimationsOf(
+                                                    context,
+                                                  )
+                                                  ? Duration.zero
+                                                  : const Duration(
+                                                      milliseconds: 280,
+                                                    ),
+                                              curve: Curves.easeOutCubic,
+                                            );
+                                          },
+                                        ),
+                                      );
+                                    },
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),

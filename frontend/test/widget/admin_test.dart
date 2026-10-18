@@ -199,6 +199,23 @@ void main() {
     await unmountApp(tester);
   });
 
+  testWidgets('admin Home tab opens discovery while Cart remains separate', (
+    tester,
+  ) async {
+    final backend = TestBackend();
+    await backend.signIn(role: 'admin');
+    await pumpApp(tester, backend, surfaceSize: _tallSurface);
+    await tester.pump();
+
+    await tester.tap(find.text('Home').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(find.text('Find your next favourite.'), findsOneWidget);
+    expect(find.text('Your cart is empty'), findsNothing);
+    await unmountApp(tester);
+  });
+
   testWidgets('tapping an admin order card opens the shared tracking view', (
     tester,
   ) async {

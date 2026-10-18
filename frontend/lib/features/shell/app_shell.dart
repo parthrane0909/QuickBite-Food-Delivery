@@ -32,7 +32,8 @@ class AppShell extends ConsumerWidget {
     final destinations = _destinations(isAdmin: isAdmin);
     final index = _indexForShell(isAdmin: isAdmin);
     void navigate(int destination) {
-      if (destination == 1) {
+      final cartDestination = isAdmin ? 2 : 1;
+      if (destination == cartDestination) {
         context.push('/cart');
         return;
       }

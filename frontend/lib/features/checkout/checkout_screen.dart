@@ -22,6 +22,7 @@ import '../../core/utils/validation.dart';
 import '../../state/auth_controller.dart';
 import '../../state/cart_controller.dart';
 import '../../state/checkout_controller.dart';
+import '../../state/orders_providers.dart';
 import '../../ui/motion/entrance.dart';
 import '../../ui/widgets/app_banner.dart';
 import '../../ui/widgets/async_state_view.dart';
@@ -163,6 +164,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       next,
     ) {
       if (next != null) {
+        // The indexed customer shell keeps its Orders branch mounted while
+        // checkout is pushed above it. Invalidate that cached first page as
+        // soon as the server confirms a new order so returning to History
+        // fetches the just-accepted order instead of showing stale results.
+        ref.invalidate(orderListProvider);
         context.pushReplacement('/orders/${next.orderId}/accepted');
       }
     });

@@ -69,7 +69,7 @@ void main() {
       expect(find.text('Roma Trattoria'), findsOneWidget);
     });
 
-    testWidgets('cuisine chips use the server-backed catalog filter', (
+    testWidgets('image-backed cuisine cards use the server-backed filter', (
       tester,
     ) async {
       final backend = TestBackend(
@@ -87,8 +87,8 @@ void main() {
       await backend.signIn();
       final container = await pumpApp(tester, backend);
       await tester.pump();
-      await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Italian'));
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Italian'));
+      await tester.ensureVisible(find.text('Italian'));
+      await tester.tap(find.text('Italian'));
       await tester.pump();
       await tester.pump();
 

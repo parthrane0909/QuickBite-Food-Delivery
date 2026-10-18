@@ -2,6 +2,29 @@
 
 This manifest covers the implementation and review artifacts across the finalization commits, including the final Compose rebuild verification. The eight root-level `quickbite_*` screenshot/reference files are user-provided, untouched, and intentionally remain outside the commits.
 
+## Final Android release correction
+
+| Path | Responsibility |
+| --- | --- |
+| `frontend/lib/features/checkout/checkout_screen.dart` | Invalidate the mounted order-history page after server acceptance so the new order appears when returning to History |
+| `frontend/lib/features/restaurants/restaurant_list_screen.dart` | Replace cuisine chips with image-backed, horizontally scrolling category cards; keep the selected category visible and pause the one-time scroll hint after touch |
+| `frontend/lib/features/restaurants/widgets/food_category_card.dart` | Accessible reusable cuisine image card with selected, tap, and image fallback states |
+| `frontend/lib/features/shell/app_shell.dart` | Route the admin Home destination to discovery while keeping Cart separate |
+| `frontend/test/widget/admin_test.dart` | Cover distinct Home and Cart destinations for admins |
+| `frontend/test/widget/catalog_test.dart` | Cover image-backed server cuisine filtering |
+| `frontend/test/widget/checkout_test.dart` | Cover refreshing the preserved order-history branch after successful checkout |
+| `docs/evidence/final/android-release-runtime-final.txt` | Physical Android release install, networking, customer order, notification, and admin navigation record |
+| `docs/evidence/final/android-release-build-final.txt` | Successful Android release build output |
+| `docs/evidence/final/flutter-targeted-run.txt` | Current 34-test Flutter regression output |
+| `docs/evidence/final/flutter-analyze-release-final.txt` | Current clean Flutter analysis output |
+| `docs/evidence/final/after-android/release-final-orders-physical.png` | Physical-device release order-history capture |
+| `scripts/build_final_evidence.py` | Build the review index with physical release evidence and artifact link |
+
+The Android APK is generated under the ignored Flutter build directory at
+`frontend/build/app/outputs/flutter-apk/app-release.apk`; its SHA-256 and
+signing details are recorded in `REPORT.md` and the runtime log. It is
+intentionally not committed as a binary build artifact.
+
 | Path | Responsibility |
 | --- | --- |
 | `README.md` | Developer setup and project overview |

@@ -1,0 +1,17 @@
+Targeted Flutter verification for Android release corrections
+
+Prior full-suite baseline (before this focused final correction set):
+  flutter test: 93 passed (flutter-test-final.txt)
+
+Focused regression suites (run against the final source):
+  flutter test test/widget/admin_test.dart test/widget/catalog_test.dart
+      test/widget/checkout_test.dart: 34 passed.
+  flutter analyze: No issues found (flutter-analyze-release-final.txt).
+
+Coverage was selected for the modified code: admin shell destination mapping,
+image-backed cuisine selector, and invalidation of the mounted order-history
+provider after accepted checkout. The complete backend suite was not repeated
+because no backend code changed; previous result was 145 passed, 1 skipped.
+
+The APK generated from the final Flutter sources was installed and exercised
+on physical CPH2793. Runtime record: android-release-runtime-final.txt.

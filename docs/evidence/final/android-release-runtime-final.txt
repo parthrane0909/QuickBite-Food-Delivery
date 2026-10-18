@@ -1,0 +1,58 @@
+QuickBite Android release runtime verification
+Date: 2026-10-18 (local host)
+Device: physical OPPO CPH2793; Android 16; serial 3C163E0096400000
+App: dev.quickbite.quickbite 1.0.0 (versionCode 1), min SDK 24, target SDK 36
+Artifact: frontend/build/app/outputs/flutter-apk/app-release.apk
+SHA-256: 830309bebb7960e53e4fa6dbae828c67ed6fe8d3ed06a32094380a2b7daaf01c
+Size: 71.4 MB (APK output shown as 69 MiB by ls)
+Signature: verified APK v2; Android Debug certificate, SHA-256
+23f565c018044b9e2b3ce46234be9d6bfba40689654b1f1087e7163594c771f2
+Merged manifest: android.permission.INTERNET present
+
+Release configuration:
+  --dart-define=API_BASE_URL=http://localhost:8000/api/v1
+The local API was reachable from the phone using:
+  adb reverse tcp:8000 tcp:8000
+The reverse mapping was active during verification. This APK requires a
+reachable endpoint for independent Wi-Fi/deployed use; rebuild with an HTTPS
+API base URL for that scenario. No backend was exposed publicly.
+
+Commands:
+  cd frontend
+  flutter build apk --release --dart-define=API_BASE_URL=http://localhost:8000/api/v1
+  adb reverse tcp:8000 tcp:8000
+  adb install -r build/app/outputs/flutter-apk/app-release.apk
+
+Results:
+  - Release build completed; details: android-release-build-final.txt.
+  - APK installed in place with adb install -r, preserving app data.
+  - App launched to its authenticated discovery screen; process remained alive.
+  - Authenticated customer session loaded live restaurant data and local food
+    images; discovery showed 1,914 available kitchens out of 2,000 total rows.
+  - Restaurant, menu, dish, cart, quantity, checkout, accepted order, tracking,
+    and order history were exercised on the phone.
+  - Exactly one tagged verification order was submitted:
+    order_c0948ac9d1ae42fdb4d375870b653764
+    47,000 INR minor units; status DRIVER_ASSIGNED.
+  - PostgreSQL confirmed the order and its item-price snapshot. Four persisted
+    notifications were present: created, paid, confirmed, driver assigned.
+  - Customer order history displayed the new order at the top after returning
+    from checkout following the session refresh fix.
+  - Admin authentication, dashboard counts, restaurant list, and navigation
+    into customer shopping/discovery were exercised. An admin editor was
+    opened then canceled; no admin data was mutated during this device run.
+  - No AndroidRuntime fatal/crash entries were present in the checked logcat.
+
+Screenshots:
+  after-android/release-final-orders-physical.png
+  after-android/release-final-smoke.png
+  after-android/release-final-admin.png
+  after-android/release-final-categories.png
+
+Signing limitation: this internal release build uses Flutter's Android Debug
+certificate. It is installable for testing, but not suitable for Play Store
+submission. No production signing key was created or overwritten.
+
+Coverage limits: admin edits were not saved on the physical device; backend
+management/authorization tests and earlier API verification cover those
+operations. iOS and a deployed HTTPS API were not tested on this Linux host.

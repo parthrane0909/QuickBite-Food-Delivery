@@ -114,14 +114,16 @@ figcaption{font-size:13px;color:#50545a;padding-top:8px}
 .wide{max-height:none;height:auto}.note{background:white;padding:18px 22px;border-radius:14px}
 </style><header><p>QUICKBITE · FULL PROJECT FINALIZATION</p>
 <h1>Review the real app output and test evidence</h1>
-<p>Android emulator captures use the real FastAPI/PostgreSQL catalogue and stop before order submission. The database currently holds 2,000 restaurants and 19,992 menu items.</p>
+<p>The final release APK was installed on a physical Android 16 phone. The verified journey reached restaurant discovery, submitted one test order, and confirmed order history and notifications. The database holds 2,000 restaurants and 19,992 menu items.</p>
 <nav><a href="#comparisons">Comparisons</a><a href="#android">Android</a>
 <a href="#web">Web</a><a href="#tests">Tests and reports</a></nav></header><main>
 <section id="comparisons"><h2>Template comparison</h2>
 <p>The contact sheet pairs each supplied template with a settled Android emulator frame. The login screen adapts the welcome visual language to a working email/password form.</p>
 <a href="contact-sheet.jpg"><img class=wide src="contact-sheet.jpg" alt="Template and Android comparison"></a></section>
-<section id="android"><h2>Android emulator · 1080 × 2400</h2>
-<p>Real API login, searchable 2,000-restaurant catalogue, restaurant menu, dish detail, cart, checkout route, order history route, sign-out.</p></section>
+<section id="android"><h2>Android · emulator and physical release</h2>
+<p>The release APK ran on the connected CPH2793 phone with the local API routed through ADB reverse. One isolated test order reached driver assignment, and its four processing notifications persisted. The focused final screen is below.</p>
+<p><a href="../../../frontend/build/app/outputs/flutter-apk/app-release.apk">Release APK artifact</a> · <a href="android-release-runtime-final.txt">Physical runtime record</a> · <a href="android-release-build-final.txt">Release build log</a></p>
+<a href="after-android/release-final-orders-physical.png"><img class=wide src="after-android/release-final-orders-physical.png" alt="Physical Android release order history"></a></section>
 """
     content += image_section("Captured Android screens", android_images)
     content += '<section id="web"><h2>Flutter web · nginx and Chrome</h2><p>The current release bundle was served through project nginx. Chrome CDP verified real demo sign-in and loaded the live restaurant discovery screen; SPA route checks are recorded in the logs. Full menu-to-checkout browser automation remains unverified. Android covers the broader authenticated journey.</p></section>'
@@ -129,7 +131,7 @@ figcaption{font-size:13px;color:#50545a;padding-top:8px}
     content += (
         '<section id="tests"><h2>Test logs and reports</h2><p><a href="REPORT.md">Final implementation and verification report</a> · <a href="FILES.md">Changed-file manifest</a></p><ul>' + links + "</ul>"
     )
-    content += "<div class=note><strong>Verification limits:</strong> no physical Android device was connected; iOS could not run on this Linux host. Browser automation packages are absent, so Chrome screenshot and HTTP route checks supplement the real Android integration run. No live checkout order was submitted.</div></section>"
+    content += "<div class=note><strong>Verification limits:</strong> iOS could not run on this Linux host. The release APK is signed with the Android debug certificate and configured for a local API reachable through ADB reverse; store signing and deployed HTTPS API verification remain outstanding. Browser automation packages are absent, so the full menu-to-checkout browser journey is unverified.</div></section>"
     content += "</main></html>"
     (EVIDENCE / "index.html").write_text(content)
     print(EVIDENCE / "index.html")
