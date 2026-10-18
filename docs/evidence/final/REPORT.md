@@ -4,9 +4,9 @@ The interrupted work was recovered without resetting Git, Compose volumes, or
 the development database. The project now contains the management API and
 portal, searchable catalogue, session/checkout fixes, a repeatable 2,000-store
 seed, licensed food imagery, and refreshed test evidence. Source-level checks
-and the Android emulator journey pass. The local Docker API image could not be
-rebuilt because Docker Hub DNS timed out; the verified source API is running on
-host port 8001 for the current local web bundle.
+and the Android emulator journey pass. The API image was rebuilt after a
+transient Docker Hub DNS failure, and the refreshed web bundle and API are now
+running through the normal Compose services on ports 8080 and 8000.
 
 ## Architecture and data safety
 
@@ -91,6 +91,7 @@ claim live GPS coordinates.
 | Android debug build and emulator run | Passed; authenticated read-only customer/admin tour (`android-runtime.txt`) |
 | Flutter web release build | Passed for port 8000 and for the current port-8001 source API (`flutter-web-build-final.txt`, `flutter-web-build-runtime.txt`) |
 | Web HTTP paths | `/`, `/welcome`, `/login`, `/restaurants`, `/admin` return nginx SPA HTML (`http-routes-final.txt`) |
+| Current Compose deployment | API readiness reports PostgreSQL and RabbitMQ up; authenticated catalogue search and admin summary passed; nginx returns HTTP 200 for SPA routes; final catalogue counts and migration head rechecked (`compose-final-runtime.txt`) |
 | Chrome mobile-web authentication | Passed: seeded customer sign-in reached live discovery at 393×852 (`web-interactive-smoke.txt`) |
 | Source API search/categories | Ready; 16 cuisine values, dish-name and combined cuisine/search requests return 200 (`http-routes-final.txt`) |
 | Android release APK | Not built; Gradle fails on Flutter SDK `integration_test` generated plugin registration (`android-release-build.txt`) |
@@ -121,20 +122,16 @@ measurements, not production capacity claims.
 ## Runtime and remaining limitations
 
 The latest release web files are served by the project nginx container. Chrome
-CDP captured the current welcome and login screens, then drove a real demo
-sign-in to restaurant discovery and captured that page. The full menu-to-
-checkout browser journey remains unverified because Python Playwright is not
-installed. The Android real-API journey and Flutter responsive widget tests
-passed. The web bundle used for the current capture points to host API port
-8001; the normal port-8000-targeted web release also compiled successfully.
-
-`docker compose build api` was attempted after the suite passed but failed while
-resolving the Dockerfile frontend because `auth.docker.io` DNS timed out. The
-Compose API image on port 8000 is therefore the pre-change image; source API
-port 8001 is healthy and was used for live API and Android verification. No
-Docker volume, database, or unrelated container was removed or reset. Once the
-registry is reachable, rebuild the API image and regenerate the normal web
-bundle for port 8000 before treating the Compose deployment as refreshed.
+CDP captured the welcome and login screens, then drove a real demo sign-in to
+restaurant discovery. The final web bundle was rebuilt for the normal Compose
+API origin on port 8000. After a transient Docker Hub DNS failure on the first
+attempt, the API image rebuild succeeded; only the API and nginx services were
+recreated, and the API readiness check reports PostgreSQL and RabbitMQ up.
+Nginx returned HTTP 200 for the root, login, and admin SPA paths. The full
+menu-to-checkout browser journey remains unverified because Python Playwright
+is not installed. The Android real-API journey and Flutter responsive widget
+tests passed. No Docker volume, database, or unrelated container was removed
+or reset.
 
 `frontend/ios/` and macOS/Xcode are unavailable on this Linux host, so iOS
 builds and simulator tests remain unverified. No physical Android device was

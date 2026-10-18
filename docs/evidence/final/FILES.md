@@ -1,6 +1,6 @@
 # Changed-file manifest
 
-This manifest covers the implementation and review artifacts in the finalization commit. The eight root-level `quickbite_*` screenshot/reference files are user-provided, untouched, and intentionally remain outside the commit.
+This manifest covers the implementation and review artifacts across the finalization commits, including the final Compose rebuild verification. The eight root-level `quickbite_*` screenshot/reference files are user-provided, untouched, and intentionally remain outside the commits.
 
 | Path | Responsibility |
 | --- | --- |
@@ -79,6 +79,9 @@ This manifest covers the implementation and review artifacts in the finalization
 | `docs/evidence/final/flutter-test-final.txt` | Final screenshots, comparisons, logs, seed backup, and reports |
 | `docs/evidence/final/flutter-tests.txt` | Final screenshots, comparisons, logs, seed backup, and reports |
 | `docs/evidence/final/flutter-web-build-final.txt` | Final screenshots, comparisons, logs, seed backup, and reports |
+| `docs/evidence/final/docker-build-api.txt` | Successful API image rebuild after transient registry DNS failure |
+| `docs/evidence/final/compose-final-runtime.txt` | Post-rebuild API readiness, SPA route, and database count verification |
+| `docs/evidence/final/web-interactive-smoke.txt` | Chrome mobile-web sign-in and live discovery smoke evidence |
 | `docs/evidence/final/flutter-web-build-runtime.txt` | Final screenshots, comparisons, logs, seed backup, and reports |
 | `docs/evidence/final/flutter-web-build.txt` | Final screenshots, comparisons, logs, seed backup, and reports |
 | `docs/evidence/final/http-routes-final.txt` | Final screenshots, comparisons, logs, seed backup, and reports |

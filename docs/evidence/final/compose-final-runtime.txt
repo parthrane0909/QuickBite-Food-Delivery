@@ -1,0 +1,30 @@
+QuickBite final Compose runtime verification
+Date: 2026-10-18
+
+API health: GET http://127.0.0.1:8000/health/ready
+Result: ready (PostgreSQL up, RabbitMQ up)
+
+Web SPA routes checked through nginx at http://127.0.0.1:8080:
+  /              HTTP 200
+  /login         HTTP 200
+  /admin         HTTP 200
+
+PostgreSQL verification (quickbite database):
+  restaurants: 2000
+  menu_items: 19992
+  menu items per restaurant: minimum 8, maximum 10
+  users: 4
+  orders: 44
+  drivers: 6
+  Alembic head: 0004
+
+The API Docker image was rebuilt successfully and the API container was
+recreated. The web bundle was rebuilt with API_BASE_URL=http://localhost:8000
+and the nginx container was recreated. PostgreSQL, RabbitMQ, and worker
+containers were not reset or removed.
+
+Authenticated API smoke against the rebuilt Compose API:
+  seeded customer login: passed (credential and token not recorded)
+  restaurant search: HTTP 200, total matching North results 121, page size 2
+  cuisine list: HTTP 200, 16 cuisine values
+  seeded admin login and /admin/summary: passed
