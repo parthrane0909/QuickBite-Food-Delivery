@@ -14,26 +14,28 @@ import 'package:flutter/material.dart';
 /// Core palette.
 abstract final class AppColors {
   // Brand
-  static const Color primary = Color(0xFFDB3A1F); // vivid coral-red (AA w/ white)
+  static const Color primary = Color(0xFFC92916); // accessible action red
   static const Color primaryDark = Color(0xFFB22C14); // pressed / high-emphasis
-  static const Color primaryDeep = Color(0xFF7E1D0C); // gradient end / dark brand
+  static const Color primaryDeep = Color(
+    0xFF7E1D0C,
+  ); // gradient end / dark brand
   static const Color primaryTint = Color(0xFFFFF0EB); // coral 50 — soft chips
 
   // Warm neutrals (surfaces)
-  static const Color background = Color(0xFFFCF7F2); // warm off-white / cream
+  static const Color background = Color(0xFFF6F6F6);
   static const Color surface = Color(0xFFFFFFFF); // cards
-  static const Color surfaceWarm = Color(0xFFF9EFE8); // cream sections / wells
-  static const Color outlineSoft = Color(0xFFEFE2D8); // hairlines, borders
+  static const Color surfaceWarm = Color(0xFFF2F2F2);
+  static const Color outlineSoft = Color(0xFFE6E6E6);
 
   // Warm darks — hero bands, dark headers, on-photo scrims (template look)
-  static const Color charcoal = Color(0xFF1C1411); // deep warm black
+  static const Color charcoal = Color(0xFF151515);
   static const Color charcoalSoft = Color(0xFF2A1F1A); // raised dark surface
   static const Color onDark = Color(0xFFFFFBF8); // text/icons on warm darks
   static const Color onDarkSoft = Color(0xFFD9CCC4); // secondary text on darks
 
   // Ink
-  static const Color ink = Color(0xFF1C1614); // headings, primary text
-  static const Color inkSoft = Color(0xFF6E635C); // secondary text (AA on cream)
+  static const Color ink = Color(0xFF171717);
+  static const Color inkSoft = Color(0xFF656565);
   static const Color inkFaint = Color(0xFF9A8D84); // tertiary/disabled text
 
   // Accents
@@ -50,9 +52,11 @@ abstract final class AppColors {
 
   // Immersive brand red — full-bleed onboarding / sign-in backgrounds
   // (reference-led: a vivid red field with a soft radial lift in the middle).
-  static const Color brandRed = Color(0xFFE2372A); // vivid red field
+  static const Color brandRed = Color(0xFFE51C0B);
   static const Color brandRedDeep = Color(0xFFB22318); // gradient mid
-  static const Color brandRedDark = Color(0xFF7C160D); // gradient end / status bar
+  static const Color brandRedDark = Color(
+    0xFF7C160D,
+  ); // gradient end / status bar
   static const Color onBrandRed = Color(0xFFFFFFFF);
   static const Color onBrandRedSoft = Color(0xCCFFFFFF);
 
@@ -125,8 +129,8 @@ abstract final class AppSpacing {
   static const double cardGap = 16;
 
   static const double radiusSm = 12;
-  static const double radiusMd = 18;
-  static const double radiusLg = 24;
+  static const double radiusMd = 16;
+  static const double radiusLg = 20;
   static const double radiusXl = 32;
   static const double radiusPill = 999;
 
@@ -178,11 +182,11 @@ abstract final class AppShadow {
 /// Motion durations & curves — deliberate, quick, never floaty. Used by the
 /// transition suite, entrance staggers, button feedback and shimmer loops.
 abstract final class AppMotion {
-  static const Duration instant = Duration(milliseconds: 120);
+  static const Duration instant = Duration(milliseconds: 140);
   static const Duration fast = Duration(milliseconds: 180);
-  static const Duration base = Duration(milliseconds: 260);
-  static const Duration slow = Duration(milliseconds: 360);
-  static const Duration hero = Duration(milliseconds: 520);
+  static const Duration base = Duration(milliseconds: 280);
+  static const Duration slow = Duration(milliseconds: 320);
+  static const Duration hero = Duration(milliseconds: 420);
 
   static const Curve easeOut = Curves.easeOutCubic;
   static const Curve easeInOut = Curves.easeInOutCubic;

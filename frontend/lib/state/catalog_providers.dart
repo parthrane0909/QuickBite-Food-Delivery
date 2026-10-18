@@ -20,6 +20,8 @@ class RestaurantsState {
     this.loading = false,
     this.loadingMore = false,
     this.error,
+    this.search = '',
+    this.selectedCuisine,
   });
 
   final List<Restaurant> items;
@@ -28,6 +30,8 @@ class RestaurantsState {
   final bool loading;
   final bool loadingMore;
   final ApiException? error;
+  final String search;
+  final String? selectedCuisine;
 
   bool get initialLoading => loading && items.isEmpty;
   bool get hasMore => items.length < total;
@@ -41,19 +45,26 @@ class RestaurantsState {
     bool? loadingMore,
     ApiException? error,
     bool clearError = false,
-  }) =>
-      RestaurantsState(
-        items: items ?? this.items,
-        page: page ?? this.page,
-        total: total ?? this.total,
-        loading: loading ?? this.loading,
-        loadingMore: loadingMore ?? this.loadingMore,
-        error: clearError ? null : (error ?? this.error),
-      );
+    String? search,
+    String? selectedCuisine,
+    bool clearCuisine = false,
+  }) => RestaurantsState(
+    items: items ?? this.items,
+    page: page ?? this.page,
+    total: total ?? this.total,
+    loading: loading ?? this.loading,
+    loadingMore: loadingMore ?? this.loadingMore,
+    error: clearError ? null : (error ?? this.error),
+    search: search ?? this.search,
+    selectedCuisine: clearCuisine
+        ? null
+        : (selectedCuisine ?? this.selectedCuisine),
+  );
 }
 
 class RestaurantsController extends Notifier<RestaurantsState> {
   static const int pageSize = 20;
+  int _requestGeneration = 0;
 
   @override
   RestaurantsState build() {
@@ -63,35 +74,73 @@ class RestaurantsController extends Notifier<RestaurantsState> {
     return const RestaurantsState(loading: true);
   }
 
-  Future<void> refresh() async {
+  Future<void> refresh({String? search, String? cuisine}) async {
+    final generation = ++_requestGeneration;
+    final query = search ?? state.search;
+    final selectedCuisine = cuisine ?? state.selectedCuisine;
     state = state.copyWith(loading: true, clearError: true);
     try {
       final page = await ref
           .read(catalogRepositoryProvider)
-          .restaurants(page: 1, pageSize: pageSize);
-      if (!ref.mounted) return;
+          .restaurants(
+            page: 1,
+            pageSize: pageSize,
+            search: query,
+            cuisine: selectedCuisine,
+          );
+      if (!ref.mounted || generation != _requestGeneration) return;
       state = state.copyWith(
         items: page.items,
         page: 1,
         total: page.total,
+        search: query,
+        selectedCuisine: selectedCuisine,
         loading: false,
         clearError: true,
       );
     } on ApiException catch (exc) {
-      if (!ref.mounted) return;
+      if (!ref.mounted || generation != _requestGeneration) return;
       state = state.copyWith(loading: false, error: exc);
     }
   }
 
+  Future<void> search(String query) async {
+    if (query.trim() == state.search) return;
+    state = state.copyWith(
+      items: const [],
+      page: 0,
+      total: 0,
+      search: query.trim(),
+    );
+    await refresh(search: query.trim());
+  }
+
+  Future<void> filterByCuisine(String? cuisine) async {
+    if (cuisine == state.selectedCuisine) return;
+    state = state.copyWith(
+      items: const [],
+      page: 0,
+      total: 0,
+      selectedCuisine: cuisine,
+      clearCuisine: cuisine == null,
+    );
+    await refresh(cuisine: cuisine);
+  }
+
   Future<void> loadMore() async {
     if (state.loadingMore || state.loading || !state.hasMore) return;
+    final generation = _requestGeneration;
     state = state.copyWith(loadingMore: true, clearError: true);
     try {
-      final next = await ref.read(catalogRepositoryProvider).restaurants(
+      final next = await ref
+          .read(catalogRepositoryProvider)
+          .restaurants(
             page: state.page + 1,
             pageSize: pageSize,
+            search: state.search,
+            cuisine: state.selectedCuisine,
           );
-      if (!ref.mounted) return;
+      if (!ref.mounted || generation != _requestGeneration) return;
       state = state.copyWith(
         items: [...state.items, ...next.items],
         page: next.page,
@@ -99,7 +148,7 @@ class RestaurantsController extends Notifier<RestaurantsState> {
         loadingMore: false,
       );
     } on ApiException catch (exc) {
-      if (!ref.mounted) return;
+      if (!ref.mounted || generation != _requestGeneration) return;
       state = state.copyWith(loadingMore: false, error: exc);
     }
   }
@@ -125,8 +174,14 @@ class RestaurantsController extends Notifier<RestaurantsState> {
   }
 }
 
+final cuisineListProvider = FutureProvider<List<String>>(
+  (ref) => ref.watch(catalogRepositoryProvider).cuisines(),
+);
+
 final restaurantsProvider =
-    NotifierProvider<RestaurantsController, RestaurantsState>(RestaurantsController.new);
+    NotifierProvider<RestaurantsController, RestaurantsState>(
+      RestaurantsController.new,
+    );
 
 // --------------------------------- menus ----------------------------------
 
@@ -161,20 +216,20 @@ class MenuState {
     bool? loadingMore,
     ApiException? error,
     bool clearError = false,
-  }) =>
-      MenuState(
-        restaurantId: restaurantId,
-        items: items ?? this.items,
-        page: page ?? this.page,
-        total: total ?? this.total,
-        loading: loading ?? this.loading,
-        loadingMore: loadingMore ?? this.loadingMore,
-        error: clearError ? null : (error ?? this.error),
-      );
+  }) => MenuState(
+    restaurantId: restaurantId,
+    items: items ?? this.items,
+    page: page ?? this.page,
+    total: total ?? this.total,
+    loading: loading ?? this.loading,
+    loadingMore: loadingMore ?? this.loadingMore,
+    error: clearError ? null : (error ?? this.error),
+  );
 }
 
 class MenuController extends Notifier<MenuState> {
-  MenuController(this.restaurantId) : _initial = MenuState(restaurantId: restaurantId);
+  MenuController(this.restaurantId)
+    : _initial = MenuState(restaurantId: restaurantId);
 
   final String restaurantId;
   final MenuState _initial;
@@ -192,11 +247,9 @@ class MenuController extends Notifier<MenuState> {
   Future<void> refresh() async {
     state = state.copyWith(loading: true, clearError: true);
     try {
-      final page = await ref.read(catalogRepositoryProvider).menu(
-            restaurantId,
-            page: 1,
-            pageSize: pageSize,
-          );
+      final page = await ref
+          .read(catalogRepositoryProvider)
+          .menu(restaurantId, page: 1, pageSize: pageSize);
       if (!ref.mounted) return;
       state = state.copyWith(
         items: page.items,
@@ -215,11 +268,9 @@ class MenuController extends Notifier<MenuState> {
     if (state.loadingMore || state.loading || !state.hasMore) return;
     state = state.copyWith(loadingMore: true, clearError: true);
     try {
-      final next = await ref.read(catalogRepositoryProvider).menu(
-            restaurantId,
-            page: state.page + 1,
-            pageSize: pageSize,
-          );
+      final next = await ref
+          .read(catalogRepositoryProvider)
+          .menu(restaurantId, page: state.page + 1, pageSize: pageSize);
       if (!ref.mounted) return;
       state = state.copyWith(
         items: [...state.items, ...next.items],
@@ -234,5 +285,6 @@ class MenuController extends Notifier<MenuState> {
   }
 }
 
-final menuProvider =
-    NotifierProvider.family<MenuController, MenuState, String>(MenuController.new);
+final menuProvider = NotifierProvider.family<MenuController, MenuState, String>(
+  MenuController.new,
+);

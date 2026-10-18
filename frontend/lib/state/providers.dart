@@ -12,6 +12,7 @@ import '../data/repositories/admin_repository.dart';
 import '../data/repositories/auth_repository.dart';
 import '../data/repositories/catalog_repository.dart';
 import '../data/repositories/order_repository.dart';
+import '../data/repositories/admin_management_repository.dart';
 import 'auth_controller.dart';
 
 /// Mutable holder of the live session — bridges auth state and networking
@@ -32,7 +33,8 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     tokenProvider: () async => store.current?.accessToken,
     // Registered lazily (read at 401-time, not build-time) to avoid a
     // construction cycle with authControllerProvider.
-    onUnauthorized: () => ref.read(authControllerProvider.notifier).handleUnauthorized(),
+    onUnauthorized: () =>
+        ref.read(authControllerProvider.notifier).handleUnauthorized(),
   );
   ref.onDispose(client.close);
   return client;
@@ -52,4 +54,8 @@ final orderRepositoryProvider = Provider<OrderRepository>(
 
 final adminRepositoryProvider = Provider<AdminRepository>(
   (ref) => AdminRepository(ref.watch(apiClientProvider)),
+);
+
+final adminManagementRepositoryProvider = Provider<AdminManagementRepository>(
+  (ref) => AdminManagementRepository(ref.watch(apiClientProvider)),
 );

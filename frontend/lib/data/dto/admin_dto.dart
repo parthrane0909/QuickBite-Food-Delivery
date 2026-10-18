@@ -49,6 +49,10 @@ class AdminSummary {
     required this.retryBacklog,
     required this.quarantineRecords,
     required this.generatedAt,
+    this.totalRestaurants = 0,
+    this.totalCustomers = 0,
+    this.totalDrivers = 0,
+    this.totalOrders = 0,
   });
 
   /// Counts for every status key (0 included), straight from PostgreSQL.
@@ -57,15 +61,24 @@ class AdminSummary {
   final int retryBacklog;
   final int quarantineRecords;
   final DateTime generatedAt;
+  final int totalRestaurants;
+  final int totalCustomers;
+  final int totalDrivers;
+  final int totalOrders;
 
   int countFor(OrderStatus status) => ordersByStatus[status.apiValue] ?? 0;
 
   factory AdminSummary.fromJson(Map<String, dynamic> json) => AdminSummary(
-        ordersByStatus: (json['orders_by_status'] as Map<String, dynamic>)
-            .map((key, value) => MapEntry(key, value as int)),
-        pendingOutboxEvents: json['pending_outbox_events'] as int,
-        retryBacklog: json['retry_backlog'] as int,
-        quarantineRecords: json['quarantine_records'] as int,
-        generatedAt: DateTime.parse(json['generated_at'] as String),
-      );
+    ordersByStatus: (json['orders_by_status'] as Map<String, dynamic>).map(
+      (key, value) => MapEntry(key, value as int),
+    ),
+    pendingOutboxEvents: json['pending_outbox_events'] as int,
+    retryBacklog: json['retry_backlog'] as int,
+    quarantineRecords: json['quarantine_records'] as int,
+    generatedAt: DateTime.parse(json['generated_at'] as String),
+    totalRestaurants: json['total_restaurants'] as int? ?? 0,
+    totalCustomers: json['total_customers'] as int? ?? 0,
+    totalDrivers: json['total_drivers'] as int? ?? 0,
+    totalOrders: json['total_orders'] as int? ?? 0,
+  );
 }

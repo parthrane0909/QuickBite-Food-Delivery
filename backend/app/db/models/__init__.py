@@ -1,6 +1,8 @@
 """Import every model so Base.metadata is complete for Alembic autogenerate."""
 
+from app.db.models.admin_audit_log import AdminAuditLog
 from app.db.models.checkout_idempotency import CheckoutIdempotency
+from app.db.models.driver import Driver
 from app.db.models.driver_assignment import DriverAssignment
 from app.db.models.menu_item import MenuItem
 from app.db.models.notification import Notification
@@ -16,6 +18,8 @@ from app.db.models.simulated_payment import SimulatedPayment
 from app.db.models.user import User
 
 __all__ = [
+    "AdminAuditLog",
+    "Driver",
     "CheckoutIdempotency",
     "DriverAssignment",
     "MenuItem",

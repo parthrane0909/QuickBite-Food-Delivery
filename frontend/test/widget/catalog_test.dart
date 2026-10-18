@@ -1,7 +1,6 @@
 /// Catalog widget tests (M5 §3): restaurant list + menu — loading, empty,
-/// error-with-retry, real item rendering, unavailable items and the
-/// single-restaurant cart conflict dialog. No category filter exists in the
-/// backend, so none is exercised here.
+/// error-with-retry, server-backed cuisine/search filtering, real item
+/// rendering, unavailable items and the single-restaurant cart conflict.
 library;
 
 import 'dart:async';
@@ -10,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quickbite/core/network/api_exception.dart';
 import 'package:quickbite/state/cart_controller.dart';
+import 'package:quickbite/state/catalog_providers.dart';
 import 'package:quickbite/ui/motion/shimmer.dart';
 
 import '../helpers/fakes.dart';
@@ -29,16 +29,20 @@ void main() {
       await backend.signIn();
       await pumpApp(tester, backend);
 
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -700));
+      await tester.pump();
       expect(
         find.byType(SkeletonRestaurantCard),
         findsWidgets,
-        reason: 'shimmer skeleton until the page arrives',
+        reason: 'shimmer skeleton follows the editorial hero',
       );
 
       gate.complete();
       await tester.pump();
       await tester.pump();
 
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -700));
+      await tester.pump();
       expect(find.text('Bella Napoli'), findsOneWidget);
     });
 
@@ -55,8 +59,69 @@ void main() {
       await pumpApp(tester, backend);
       await tester.pump();
 
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -700));
+      await tester.pump();
+      await tester.ensureVisible(find.text('Bella Napoli'));
+      await tester.pump();
       expect(find.text('Bella Napoli'), findsOneWidget);
+      await tester.ensureVisible(find.text('Roma Trattoria'));
+      await tester.pump();
       expect(find.text('Roma Trattoria'), findsOneWidget);
+    });
+
+    testWidgets('cuisine chips use the server-backed catalog filter', (
+      tester,
+    ) async {
+      final backend = TestBackend(
+        catalog: FakeCatalogRepository(
+          restaurantList: [
+            fixtureRestaurant(cuisine: 'Italian'),
+            fixtureRestaurant(
+              id: 'rest_spice_route',
+              name: 'Spice Route Kitchen',
+              cuisine: 'North Indian',
+            ),
+          ],
+        ),
+      );
+      await backend.signIn();
+      final container = await pumpApp(tester, backend);
+      await tester.pump();
+      await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Italian'));
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Italian'));
+      await tester.pump();
+      await tester.pump();
+
+      final state = container.read(restaurantsProvider);
+      expect(state.selectedCuisine, 'Italian');
+      expect(state.items.map((item) => item.name), ['Bella Napoli']);
+      await unmountApp(tester);
+    });
+
+    testWidgets('live search suggestions include dishes from matching menus', (
+      tester,
+    ) async {
+      final backend = TestBackend(
+        catalog: FakeCatalogRepository(
+          restaurantList: [fixtureRestaurant(cuisine: 'Italian')],
+        ),
+      );
+      await backend.signIn();
+      final container = await pumpApp(tester, backend);
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField).first, 'Margherita');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump();
+      await tester.pump();
+
+      final state = container.read(restaurantsProvider);
+      expect(state.search, 'Margherita');
+      expect(state.items.map((item) => item.name), ['Bella Napoli']);
+      await tester.ensureVisible(find.text('Suggestions'));
+      await tester.pump();
+      expect(find.text('Suggestions'), findsOneWidget);
+      await unmountApp(tester);
     });
 
     testWidgets('shows the empty state when no restaurants are seeded', (
@@ -69,6 +134,8 @@ void main() {
       await pumpApp(tester, backend);
       await tester.pump();
 
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -700));
+      await tester.pump();
       expect(find.text('No restaurants yet'), findsOneWidget);
       expect(find.text('Refresh'), findsOneWidget);
     });
@@ -84,10 +151,17 @@ void main() {
       await pumpApp(tester, backend);
       await tester.pump();
 
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -700));
+      await tester.pump();
       expect(find.text('Something went wrong'), findsOneWidget);
       expect(find.text('Database hiccup'), findsOneWidget);
 
       backend.catalog.restaurantsError = null;
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.ensureVisible(
+        find.widgetWithText(OutlinedButton, 'Try again'),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.tap(find.widgetWithText(OutlinedButton, 'Try again'));
       await tester.pump();
       await tester.pump();
@@ -101,6 +175,11 @@ void main() {
       await pumpApp(tester, backend);
       await tester.pump();
 
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -700));
+      await tester.pump();
+      await tester.ensureVisible(find.text('Bella Napoli'));
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.tap(find.text('Bella Napoli'));
       await tester.pump();
       await tester.pump();
@@ -121,7 +200,7 @@ void main() {
       await tester.pump();
 
       expect(
-        find.byType(SkeletonListTile),
+        find.byType(SkeletonDishTile),
         findsWidgets,
         reason: 'shimmer row skeletons until the menu arrives',
       );
@@ -189,6 +268,11 @@ void main() {
       expect(find.text('Menu service down'), findsOneWidget);
 
       backend.catalog.menuError = null;
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.ensureVisible(
+        find.widgetWithText(OutlinedButton, 'Try again'),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.tap(find.widgetWithText(OutlinedButton, 'Try again'));
       await tester.pump();
       await tester.pump();
@@ -207,14 +291,26 @@ void main() {
       // Image-led menu page: the first tile may sit below the fold, and once
       // the floating cart bar appears the body shrinks again — scroll each
       // control into the viewport before tapping (as a user would).
-      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Add'));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.scrollUntilVisible(
+        find.widgetWithText(FilledButton, 'Add'),
+        160,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
       await tester.tap(find.widgetWithText(FilledButton, 'Add'));
       await tester.pump();
       expect(find.textContaining('View cart'), findsOneWidget);
       expect(find.textContaining('1 item'), findsOneWidget);
 
-      await tester.ensureVisible(find.byIcon(Icons.add_rounded));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.scrollUntilVisible(
+        find.byIcon(Icons.add_rounded),
+        120,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.pump();
       await tester.tap(find.byIcon(Icons.add_rounded));
       await tester.pump();
@@ -241,7 +337,13 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Add'));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.scrollUntilVisible(
+        find.widgetWithText(FilledButton, 'Add'),
+        160,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
       await tester.tap(find.widgetWithText(FilledButton, 'Add'));
       await tester.pump();

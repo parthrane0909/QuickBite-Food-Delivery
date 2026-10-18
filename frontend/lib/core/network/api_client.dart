@@ -28,9 +28,9 @@ class ApiClient {
     Duration? timeout,
     this.tokenProvider,
     this.onUnauthorized,
-  })  : _http = httpClient ?? http.Client(),
-        baseUrl = baseUrl ?? AppConfig.apiBaseUrl,
-        _timeout = timeout ?? AppConfig.apiTimeout;
+  }) : _http = httpClient ?? http.Client(),
+       baseUrl = baseUrl ?? AppConfig.apiBaseUrl,
+       _timeout = timeout ?? AppConfig.apiTimeout;
 
   final http.Client _http;
   final Duration _timeout;
@@ -68,6 +68,19 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> patch(
+    String path, {
+    Object? body,
+    Map<String, String>? query,
+    Map<String, String>? headers,
+  }) async {
+    final uri = _uri(path, query);
+    final merged = await _headers(headers, jsonBody: true);
+    return _send(
+      () => _http.patch(uri, headers: merged, body: jsonEncode(body ?? {})),
+    );
+  }
+
   Uri _uri(String path, Map<String, String>? query) {
     final base = Uri.parse('$baseUrl/$path');
     return query == null || query.isEmpty
@@ -102,7 +115,8 @@ class ApiClient {
     } on ClientException catch (exc) {
       throw ApiException(
         code: 'network_error',
-        message: 'Could not reach the server. Check your connection (${exc.message}).',
+        message:
+            'Could not reach the server. Check your connection (${exc.message}).',
       );
     } on Exception catch (exc) {
       // VM platforms surface SocketException and friends directly; treat any
@@ -132,16 +146,20 @@ class ApiClient {
     }
 
     final error = decoded['error'];
-    final envelope = error is Map<String, dynamic> ? error : const <String, dynamic>{};
+    final envelope = error is Map<String, dynamic>
+        ? error
+        : const <String, dynamic>{};
     final apiException = ApiException(
       statusCode: response.statusCode,
       code: (envelope['code'] as String?) ?? 'HTTP_ERROR',
-      message: (envelope['message'] as String?) ??
+      message:
+          (envelope['message'] as String?) ??
           'Request failed (${response.statusCode}).',
       details: envelope['details'] is Map<String, dynamic>
           ? envelope['details'] as Map<String, dynamic>
           : null,
-      requestId: (envelope['request_id'] as String?) ??
+      requestId:
+          (envelope['request_id'] as String?) ??
           response.headers['x-request-id'],
     );
     if (apiException.isUnauthorized) onUnauthorized?.call();

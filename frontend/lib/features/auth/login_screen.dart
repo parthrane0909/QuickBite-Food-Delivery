@@ -14,6 +14,7 @@
 /// (optional per assignment, out of scope for M5).
 library;
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -26,6 +27,7 @@ import '../../state/auth_controller.dart';
 import '../../ui/motion/entrance.dart';
 import '../../ui/widgets/app_banner.dart';
 import '../../ui/widgets/primary_button.dart';
+import '../../ui/widgets/brand_stage.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -78,8 +80,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (error.code == 'INVALID_CREDENTIALS') {
       return 'Email or password is incorrect.';
     }
-    if (error.isTimeout) return 'The server took too long to respond. Try again.';
-    if (error.isNetwork) return 'Cannot reach the server. Check your connection.';
+    if (error.isTimeout) {
+      return 'The server took too long to respond. Try again.';
+    }
+    if (error.isNetwork) {
+      return 'Cannot reach the server. Check your connection.';
+    }
     return error.message;
   }
 
@@ -89,6 +95,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } else {
       context.go('/welcome');
     }
+  }
+
+  void _fillDemo(String email, String password) {
+    setState(() {
+      _emailController.text = email;
+      _passwordController.text = password;
+      _error = null;
+    });
   }
 
   /// Pill-shaped field chrome (reference: rounded pill controls on a sheet).
@@ -105,246 +119,288 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final text = Theme.of(context).textTheme;
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     ref.listen(authControllerProvider, (previous, next) {
       // Clear field errors when the session-expiry banner changes state.
       if (previous?.sessionExpired != next.sessionExpired) setState(() {});
     });
 
-    return Scaffold(
-      backgroundColor: AppColors.brandRedDark,
-      body: Stack(
-        fit: StackFit.expand,
+    final form = Form(
+      key: _formKey,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const DecoratedBox(
-            decoration: BoxDecoration(gradient: AppColors.brandRedGradient),
+          if (auth.sessionExpired) ...[
+            AppBanner(
+              kind: AppBannerKind.warning,
+              message: 'Your session expired. Please sign in again.',
+              actionLabel: 'Got it',
+              onAction: () => ref
+                  .read(authControllerProvider.notifier)
+                  .acknowledgeSessionExpiry(),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
+          if (_error != null) ...[
+            Semantics(
+              liveRegion: true,
+              child: AppBanner(
+                kind: _error!.code == 'INVALID_CREDENTIALS'
+                    ? AppBannerKind.danger
+                    : AppBannerKind.warning,
+                message: _errorMessage,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
+          TextFormField(
+            controller: _emailController,
+            enabled: !_submitting,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.email, AutofillHints.username],
+            autocorrect: false,
+            decoration: InputDecoration(
+              labelText: 'Email',
+              hintText: 'you@example.com',
+              fillColor: AppColors.surfaceWarm,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.lg,
+              ),
+              prefixIcon: const Icon(Icons.mail_outline_rounded),
+              border: _pillBorder(),
+              enabledBorder: _pillBorder(),
+              focusedBorder: _pillBorder(
+                borderSide: AppColors.primary,
+                width: 1.8,
+              ),
+              errorBorder: _pillBorder(borderSide: AppColors.danger),
+              focusedErrorBorder: _pillBorder(
+                borderSide: AppColors.danger,
+                width: 1.8,
+              ),
+            ),
+            validator: (value) => validateEmail(value ?? ''),
           ),
-          const DecoratedBox(
-            decoration: BoxDecoration(gradient: AppColors.brandRedGlow),
+          const SizedBox(height: AppSpacing.lg),
+          TextFormField(
+            controller: _passwordController,
+            enabled: !_submitting,
+            obscureText: _obscurePassword,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.password],
+            onFieldSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              labelText: 'Password',
+              hintText: 'Enter your password',
+              fillColor: AppColors.surfaceWarm,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.lg,
+              ),
+              prefixIcon: const Icon(Icons.lock_outline_rounded),
+              suffixIcon: IconButton(
+                tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
+              border: _pillBorder(),
+              enabledBorder: _pillBorder(),
+              focusedBorder: _pillBorder(
+                borderSide: AppColors.primary,
+                width: 1.8,
+              ),
+              errorBorder: _pillBorder(borderSide: AppColors.danger),
+              focusedErrorBorder: _pillBorder(
+                borderSide: AppColors.danger,
+                width: 1.8,
+              ),
+            ),
+            validator: (value) => validatePassword(value ?? ''),
           ),
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 460),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+          const SizedBox(height: AppSpacing.xl),
+          PrimaryButton(
+            label: 'Sign In',
+            loading: _submitting,
+            onPressed: _submit,
+          ),
+          if (kDebugMode) ...[
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _submitting
+                        ? null
+                        : () => _fillDemo(
+                            'alice@quickbite.dev',
+                            'quickbite!alice1',
+                          ),
+                    icon: const Icon(Icons.person_outline_rounded),
+                    label: const Text('Customer demo'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _submitting
+                        ? null
+                        : () => _fillDemo(
+                            'admin@quickbite.dev',
+                            'quickbite!admin1',
+                          ),
+                    icon: const Icon(Icons.admin_panel_settings_outlined),
+                    label: const Text('Admin demo'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+    final sheet = Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: AppShadow.raised,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Sign in', style: text.headlineSmall),
+          const SizedBox(height: 6),
+          Text(
+            'Your next favourite is waiting.',
+            style: text.bodyMedium?.copyWith(color: AppColors.inkSoft),
+          ),
+          const SizedBox(height: 24),
+          form,
+        ],
+      ),
+    );
+    final headline = Semantics(
+      header: true,
+      child: Text(
+        'Good to\nsee you.',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: MediaQuery.sizeOf(context).width >= 900 ? 76 : 48,
+          height: .98,
+          letterSpacing: -2,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+    return Scaffold(
+      backgroundColor: AppColors.brandRed,
+      body: BrandStage(
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final wide = box.maxWidth >= 900;
+              final keyboard = keyboardVisible;
+              final intro = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Entrance(
-                        index: 0,
-                        child: Row(
-                          children: [
-                            IconButton(
-                              tooltip: 'Back',
-                              onPressed: _goBack,
-                              color: AppColors.onBrandRed,
-                              icon: const Icon(Icons.arrow_back_rounded),
-                            ),
-                            const Spacer(),
-                            Text(
-                              'QuickBite',
-                              style: AppTypography.wordmark(
-                                size: 20,
-                                color: AppColors.onBrandRed,
-                              ),
-                            ),
-                          ],
-                        ),
+                      IconButton(
+                        tooltip: 'Back',
+                        onPressed: _goBack,
+                        color: Colors.white,
+                        icon: const Icon(Icons.arrow_back_rounded),
                       ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Entrance(
-                        index: 1,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Semantics(
-                              header: true,
-                              child: Text(
-                                'Welcome back',
-                                style: text.displaySmall?.copyWith(
-                                  color: AppColors.onBrandRed,
-                                  fontWeight: FontWeight.w800,
-                                  height: 1.05,
-                                  letterSpacing: -0.8,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.sm),
-                            Text(
-                              'Sign in to browse restaurants and track your '
-                              'orders.',
-                              style: text.bodyLarge?.copyWith(
-                                color: AppColors.onBrandRedSoft,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
-                      Entrance(
-                        index: 2,
-                        child: Container(
-                          padding: const EdgeInsets.all(AppSpacing.xl),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(
-                              AppSpacing.radiusXl,
-                            ),
-                            boxShadow: AppShadow.raised,
-                          ),
-                          child: Form(
-                            key: _formKey,
-                            autovalidateMode:
-                                AutovalidateMode.onUserInteraction,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (auth.sessionExpired) ...[
-                                  AppBanner(
-                                    kind: AppBannerKind.warning,
-                                    message:
-                                        'Your session expired. Please sign in again.',
-                                    actionLabel: 'Got it',
-                                    onAction: () => ref
-                                        .read(authControllerProvider.notifier)
-                                        .acknowledgeSessionExpiry(),
-                                  ),
-                                  const SizedBox(height: AppSpacing.lg),
-                                ],
-                                if (_error != null) ...[
-                                  Semantics(
-                                    liveRegion: true,
-                                    child: AppBanner(
-                                      kind:
-                                          _error!.code == 'INVALID_CREDENTIALS'
-                                          ? AppBannerKind.danger
-                                          : AppBannerKind.warning,
-                                      message: _errorMessage,
-                                    ),
-                                  ),
-                                  const SizedBox(height: AppSpacing.lg),
-                                ],
-                                TextFormField(
-                                  controller: _emailController,
-                                  enabled: !_submitting,
-                                  keyboardType: TextInputType.emailAddress,
-                                  textInputAction: TextInputAction.next,
-                                  autofillHints: const [
-                                    AutofillHints.email,
-                                    AutofillHints.username,
-                                  ],
-                                  autocorrect: false,
-                                  decoration: InputDecoration(
-                                    labelText: 'Email',
-                                    hintText: 'you@example.com',
-                                    fillColor: AppColors.surfaceWarm,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: AppSpacing.lg,
-                                      vertical: AppSpacing.lg,
-                                    ),
-                                    prefixIcon: const Icon(
-                                      Icons.mail_outline_rounded,
-                                    ),
-                                    border: _pillBorder(),
-                                    enabledBorder: _pillBorder(),
-                                    focusedBorder: _pillBorder(
-                                      borderSide: AppColors.primary,
-                                      width: 1.8,
-                                    ),
-                                    errorBorder: _pillBorder(
-                                      borderSide: AppColors.danger,
-                                    ),
-                                    focusedErrorBorder: _pillBorder(
-                                      borderSide: AppColors.danger,
-                                      width: 1.8,
-                                    ),
-                                  ),
-                                  validator: (value) =>
-                                      validateEmail(value ?? ''),
-                                ),
-                                const SizedBox(height: AppSpacing.lg),
-                                TextFormField(
-                                  controller: _passwordController,
-                                  enabled: !_submitting,
-                                  obscureText: _obscurePassword,
-                                  textInputAction: TextInputAction.done,
-                                  autofillHints: const [AutofillHints.password],
-                                  onFieldSubmitted: (_) => _submit(),
-                                  decoration: InputDecoration(
-                                    labelText: 'Password',
-                                    hintText: 'Enter your password',
-                                    fillColor: AppColors.surfaceWarm,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: AppSpacing.lg,
-                                      vertical: AppSpacing.lg,
-                                    ),
-                                    prefixIcon: const Icon(
-                                      Icons.lock_outline_rounded,
-                                    ),
-                                    suffixIcon: IconButton(
-                                      tooltip: _obscurePassword
-                                          ? 'Show password'
-                                          : 'Hide password',
-                                      icon: Icon(
-                                        _obscurePassword
-                                            ? Icons.visibility_outlined
-                                            : Icons.visibility_off_outlined,
-                                      ),
-                                      onPressed: () => setState(
-                                        () => _obscurePassword =
-                                            !_obscurePassword,
-                                      ),
-                                    ),
-                                    border: _pillBorder(),
-                                    enabledBorder: _pillBorder(),
-                                    focusedBorder: _pillBorder(
-                                      borderSide: AppColors.primary,
-                                      width: 1.8,
-                                    ),
-                                    errorBorder: _pillBorder(
-                                      borderSide: AppColors.danger,
-                                    ),
-                                    focusedErrorBorder: _pillBorder(
-                                      borderSide: AppColors.danger,
-                                      width: 1.8,
-                                    ),
-                                  ),
-                                  validator: (value) =>
-                                      validatePassword(value ?? ''),
-                                ),
-                                const SizedBox(height: AppSpacing.xl),
-                                PrimaryButton(
-                                  label: 'Sign In',
-                                  loading: _submitting,
-                                  onPressed: _submit,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Entrance(
-                        index: 3,
+                      const Spacer(),
+                      Flexible(
                         child: Text(
-                          'Customer and admin accounts sign in here.\n'
-                          'Registration is not available in this build.',
-                          textAlign: TextAlign.center,
-                          style: text.bodySmall?.copyWith(
-                            color: AppColors.onBrandRed.withValues(alpha: 0.72),
+                          'QuickBite',
+                          style: AppTypography.wordmark(
+                            size: 24,
+                            color: Colors.white,
                           ),
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 20),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: keyboard
+                            ? const Text(
+                                'Welcome back',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              )
+                            : Entrance(child: headline),
+                      ),
+                      if (!wide &&
+                          !keyboard &&
+                          MediaQuery.textScalerOf(context).scale(16) < 21)
+                        const Expanded(
+                          flex: 2,
+                          child: SizedBox(height: 132, child: BurgerHero()),
+                        ),
+                    ],
+                  ),
+                  if (wide) const SizedBox(height: 320, child: BurgerHero()),
+                ],
+              );
+              return Center(
+                child: SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.all(wide ? 48 : 20),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1080),
+                    child: wide
+                        ? Row(
+                            children: [
+                              Expanded(child: intro),
+                              const SizedBox(width: 64),
+                              Expanded(child: Entrance(index: 1, child: sheet)),
+                            ],
+                          )
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              intro,
+                              const SizedBox(height: 24),
+                              Entrance(index: 1, child: sheet),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Fresh choices. One QuickBite.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
-        ],
+        ),
       ),
     );
   }

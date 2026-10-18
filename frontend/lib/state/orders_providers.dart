@@ -50,16 +50,15 @@ class OrderListState {
     bool clearFilter = false,
     ApiException? error,
     bool clearError = false,
-  }) =>
-      OrderListState(
-        items: items ?? this.items,
-        page: page ?? this.page,
-        total: total ?? this.total,
-        loading: loading ?? this.loading,
-        loadingMore: loadingMore ?? this.loadingMore,
-        filter: clearFilter ? null : (filter ?? this.filter),
-        error: clearError ? null : (error ?? this.error),
-      );
+  }) => OrderListState(
+    items: items ?? this.items,
+    page: page ?? this.page,
+    total: total ?? this.total,
+    loading: loading ?? this.loading,
+    loadingMore: loadingMore ?? this.loadingMore,
+    filter: clearFilter ? null : (filter ?? this.filter),
+    error: clearError ? null : (error ?? this.error),
+  );
 }
 
 class OrderListController extends Notifier<OrderListState> {
@@ -76,7 +75,9 @@ class OrderListController extends Notifier<OrderListState> {
   Future<void> refresh() async {
     state = state.copyWith(loading: true, clearError: true);
     try {
-      final page = await ref.read(orderRepositoryProvider).myOrders(
+      final page = await ref
+          .read(orderRepositoryProvider)
+          .myOrders(
             page: 1,
             pageSize: pageSize,
             status: state.filter?.apiValue,
@@ -99,7 +100,9 @@ class OrderListController extends Notifier<OrderListState> {
     if (state.loadingMore || state.loading || !state.hasMore) return;
     state = state.copyWith(loadingMore: true, clearError: true);
     try {
-      final next = await ref.read(orderRepositoryProvider).myOrders(
+      final next = await ref
+          .read(orderRepositoryProvider)
+          .myOrders(
             page: state.page + 1,
             pageSize: pageSize,
             status: state.filter?.apiValue,
@@ -121,13 +124,17 @@ class OrderListController extends Notifier<OrderListState> {
   /// supports it — it does, on GET /orders).
   Future<void> setFilter(OrderStatus? filter) async {
     if (filter == state.filter) return;
-    state = state.copyWith(filter: filter ?? OrderStatus.pending, clearFilter: filter == null);
+    state = state.copyWith(
+      filter: filter ?? OrderStatus.pending,
+      clearFilter: filter == null,
+    );
     await refresh();
   }
 }
 
-final orderListProvider =
-    NotifierProvider<OrderListController, OrderListState>(OrderListController.new);
+final orderListProvider = NotifierProvider<OrderListController, OrderListState>(
+  OrderListController.new,
+);
 
 // --------------------------- per-order watcher ----------------------------
 
@@ -172,18 +179,17 @@ class OrderWatchState {
     bool clearError = false,
     int? consecutiveErrors,
     DateTime? lastRefreshAt,
-  }) =>
-      OrderWatchState(
-        orderId: orderId,
-        order: order ?? this.order,
-        history: history ?? this.history,
-        notifications: notifications ?? this.notifications,
-        refreshing: refreshing ?? this.refreshing,
-        firstLoad: firstLoad ?? this.firstLoad,
-        refreshError: clearError ? null : (refreshError ?? this.refreshError),
-        consecutiveErrors: consecutiveErrors ?? this.consecutiveErrors,
-        lastRefreshAt: lastRefreshAt ?? this.lastRefreshAt,
-      );
+  }) => OrderWatchState(
+    orderId: orderId,
+    order: order ?? this.order,
+    history: history ?? this.history,
+    notifications: notifications ?? this.notifications,
+    refreshing: refreshing ?? this.refreshing,
+    firstLoad: firstLoad ?? this.firstLoad,
+    refreshError: clearError ? null : (refreshError ?? this.refreshError),
+    consecutiveErrors: consecutiveErrors ?? this.consecutiveErrors,
+    lastRefreshAt: lastRefreshAt ?? this.lastRefreshAt,
+  );
 }
 
 /// Notification page wrapper keeps `Paged` generic-free here.
@@ -200,7 +206,8 @@ class PagedNotifications {
 
   bool get hasMore => items.length < total;
 
-  PagedNotifications appended(List<NotificationEntry> more) => PagedNotifications(
+  PagedNotifications appended(List<NotificationEntry> more) =>
+      PagedNotifications(
         items: [...items, ...more],
         page: page + 1,
         total: total,
@@ -209,7 +216,7 @@ class PagedNotifications {
 
 class OrderWatchController extends Notifier<OrderWatchState> {
   OrderWatchController(this.orderId)
-      : _initial = OrderWatchState(orderId: orderId, refreshing: true);
+    : _initial = OrderWatchState(orderId: orderId, refreshing: true);
 
   final String orderId;
   final OrderWatchState _initial;
@@ -241,15 +248,16 @@ class OrderWatchController extends Notifier<OrderWatchState> {
       }
       final detail = await repo.order(orderId);
       final history = await repo.history(orderId);
-      PagedNotifications? notifications = state.notifications;
-      if (notifications == null) {
-        final page = await repo.notifications(orderId, page: 1, pageSize: 20);
-        notifications = PagedNotifications(
-          items: page.items,
-          page: page.page,
-          total: page.total,
-        );
-      }
+      final page = await repo.notifications(orderId, page: 1, pageSize: 20);
+      final previous =
+          state.notifications?.items ?? const <NotificationEntry>[];
+      final firstPageIds = page.items.map((entry) => entry.id).toSet();
+      final older = previous.where((entry) => !firstPageIds.contains(entry.id));
+      final notifications = PagedNotifications(
+        items: [...page.items, ...older],
+        page: state.notifications?.page ?? page.page,
+        total: page.total,
+      );
       if (!ref.mounted) {
         _inFlight = false;
         return;
@@ -271,7 +279,11 @@ class OrderWatchController extends Notifier<OrderWatchState> {
       }
       if (exc.isUnauthorized) {
         // Session ended: stop the watcher; the router will redirect.
-        state = state.copyWith(refreshing: false, firstLoad: false, clearError: true);
+        state = state.copyWith(
+          refreshing: false,
+          firstLoad: false,
+          clearError: true,
+        );
       } else {
         state = state.copyWith(
           refreshing: false,
@@ -290,11 +302,9 @@ class OrderWatchController extends Notifier<OrderWatchState> {
     final current = state.notifications;
     if (current == null || !current.hasMore) return;
     try {
-      final page = await ref.read(orderRepositoryProvider).notifications(
-            orderId,
-            page: current.page + 1,
-            pageSize: 20,
-          );
+      final page = await ref
+          .read(orderRepositoryProvider)
+          .notifications(orderId, page: current.page + 1, pageSize: 20);
       if (!ref.mounted) return;
       state = state.copyWith(
         notifications: current.appended(page.items),
@@ -309,5 +319,5 @@ class OrderWatchController extends Notifier<OrderWatchState> {
 
 final orderWatchProvider =
     NotifierProvider.family<OrderWatchController, OrderWatchState, String>(
-  OrderWatchController.new,
-);
+      OrderWatchController.new,
+    );

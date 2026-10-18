@@ -12,7 +12,7 @@ from typing import Annotated
 from fastapi import APIRouter, Header, Query
 from fastapi.responses import JSONResponse
 
-from app.api.deps import CurrentUserDep, CustomerDep, RequestIdDep, SessionDep
+from app.api.deps import CurrentUserDep, RequestIdDep, SessionDep, ShopperDep
 from app.core.errors import IdempotencyKeyMissingError, ValidationFailedError
 from app.schemas.common import MAX_PAGE_SIZE
 from app.schemas.orders import (
@@ -54,7 +54,7 @@ _ACCEPTANCE_HEADERS = {
 async def checkout_order(
     payload: CheckoutRequest,
     session: SessionDep,
-    user: CustomerDep,
+    user: ShopperDep,
     request_id: RequestIdDep,
     idempotency_key: IdempotencyKeyHeader = None,
 ) -> JSONResponse:
@@ -87,7 +87,7 @@ async def checkout_order(
 @router.get("/orders", response_model=OrderPage)
 async def list_my_orders(
     session: SessionDep,
-    user: CustomerDep,
+    user: ShopperDep,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = 20,
     status: ORDER_STATUS_FILTER | None = None,

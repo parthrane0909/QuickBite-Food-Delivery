@@ -26,9 +26,10 @@ import '../core/network/api_exception.dart';
 import '../core/utils/idempotency_key.dart';
 import '../data/dto/order_dto.dart';
 import 'cart_controller.dart';
+import 'auth_controller.dart';
 import 'providers.dart';
 
-const String _pendingPrefsKey = 'quickbite.pending_checkout.v1';
+const String _pendingPrefsPrefix = 'quickbite.pending_checkout.v1.';
 
 /// Immutable snapshot of what will be sent — the canonical request bound to
 /// a key. Serialized to prefs so an app restart can resume safely.
@@ -54,13 +55,14 @@ class PendingCheckout {
   final int attempts;
 
   bool get hasBeenSent => attempts > 0;
-  int get subtotalMinor => lines.fold(0, (sum, line) => sum + line.lineTotalMinor);
+  int get subtotalMinor =>
+      lines.fold(0, (sum, line) => sum + line.lineTotalMinor);
   String get currency => lines.isEmpty ? 'INR' : lines.first.currency;
 
   List<CheckoutItem> get checkoutItems => [
-        for (final line in lines)
-          CheckoutItem(menuItemId: line.menuItemId, quantity: line.quantity),
-      ];
+    for (final line in lines)
+      CheckoutItem(menuItemId: line.menuItemId, quantity: line.quantity),
+  ];
 
   /// True when the live cart still matches this attempt exactly (used to
   /// decide whether a confirmed checkout should clear the cart).
@@ -73,7 +75,8 @@ class PendingCheckout {
     return true;
   }
 
-  PendingCheckout copyWith({String? deliveryAddress, int? attempts}) => PendingCheckout(
+  PendingCheckout copyWith({String? deliveryAddress, int? attempts}) =>
+      PendingCheckout(
         idempotencyKey: idempotencyKey,
         restaurantId: restaurantId,
         restaurantName: restaurantName,
@@ -84,16 +87,17 @@ class PendingCheckout {
       );
 
   Map<String, dynamic> toJson() => {
-        'idempotency_key': idempotencyKey,
-        'restaurant_id': restaurantId,
-        'restaurant_name': restaurantName,
-        'delivery_address': deliveryAddress,
-        'lines': lines.map((line) => line.toJson()).toList(),
-        'created_at': createdAt.toUtc().toIso8601String(),
-        'attempts': attempts,
-      };
+    'idempotency_key': idempotencyKey,
+    'restaurant_id': restaurantId,
+    'restaurant_name': restaurantName,
+    'delivery_address': deliveryAddress,
+    'lines': lines.map((line) => line.toJson()).toList(),
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'attempts': attempts,
+  };
 
-  factory PendingCheckout.fromJson(Map<String, dynamic> json) => PendingCheckout(
+  factory PendingCheckout.fromJson(Map<String, dynamic> json) =>
+      PendingCheckout(
         idempotencyKey: json['idempotency_key'] as String,
         restaurantId: json['restaurant_id'] as String,
         restaurantName: json['restaurant_name'] as String? ?? '',
@@ -139,45 +143,58 @@ class CheckoutState {
     bool clearAccepted = false,
     ApiException? lastError,
     bool clearError = false,
-  }) =>
-      CheckoutState(
-        pending: clearPending ? null : (pending ?? this.pending),
-        submitting: submitting ?? this.submitting,
-        accepted: clearAccepted ? null : (accepted ?? this.accepted),
-        lastError: clearError ? null : (lastError ?? this.lastError),
-      );
+  }) => CheckoutState(
+    pending: clearPending ? null : (pending ?? this.pending),
+    submitting: submitting ?? this.submitting,
+    accepted: clearAccepted ? null : (accepted ?? this.accepted),
+    lastError: clearError ? null : (lastError ?? this.lastError),
+  );
 }
 
 class CheckoutController extends Notifier<CheckoutState> {
+  String? _userId;
+
   @override
   CheckoutState build() {
-    _restorePending();
+    final id = ref.watch(
+      authControllerProvider.select((auth) => auth.session?.user.id),
+    );
+    _userId = id == null || id.isEmpty ? null : id;
+    if (_userId case final userId?) _restorePending(userId);
     return CheckoutState.idle;
   }
 
-  Future<void> _restorePending() async {
+  Future<void> _restorePending(String userId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_pendingPrefsKey);
+      final raw = prefs.getString('$_pendingPrefsPrefix$userId');
       if (raw == null || raw.isEmpty) return;
-      final pending = PendingCheckout.fromJson(jsonDecode(raw) as Map<String, dynamic>);
-      if (!ref.mounted || pending.idempotencyKey.isEmpty) return;
+      final pending = PendingCheckout.fromJson(
+        jsonDecode(raw) as Map<String, dynamic>,
+      );
+      if (!ref.mounted || _userId != userId || pending.idempotencyKey.isEmpty) {
+        return;
+      }
       state = state.copyWith(pending: pending);
     } catch (_) {
       // Corrupt record — discard (it can never be matched to a payload).
     }
   }
 
-  Future<void> _persist(PendingCheckout? pending) async {
+  Future<bool> _persist(PendingCheckout? pending) async {
+    final userId = _userId;
+    if (userId == null) return false;
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (!ref.mounted || _userId != userId) return false;
+      final key = '$_pendingPrefsPrefix$userId';
       if (pending == null) {
-        await prefs.remove(_pendingPrefsKey);
+        return await prefs.remove(key);
       } else {
-        await prefs.setString(_pendingPrefsKey, jsonEncode(pending.toJson()));
+        return await prefs.setString(key, jsonEncode(pending.toJson()));
       }
     } catch (_) {
-      // Best effort: in-memory state remains authoritative this run.
+      return false;
     }
   }
 
@@ -204,7 +221,11 @@ class CheckoutController extends Notifier<CheckoutState> {
       createdAt: DateTime.now().toUtc(),
       attempts: 0,
     );
-    state = state.copyWith(pending: pending, clearError: true, clearAccepted: true);
+    state = state.copyWith(
+      pending: pending,
+      clearError: true,
+      clearAccepted: true,
+    );
     _persist(state.pending);
   }
 
@@ -218,7 +239,18 @@ class CheckoutController extends Notifier<CheckoutState> {
     state = state.copyWith(submitting: true, clearError: true);
     final sent = pending.copyWith(attempts: pending.attempts + 1);
     state = state.copyWith(pending: sent);
-    await _persist(sent);
+    final persisted = await _persist(sent);
+    if (!persisted) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        submitting: false,
+        lastError: const ApiException(
+          code: 'checkout_persistence_failed',
+          message: 'This checkout could not be saved on this device. Nothing was sent. Please try again.',
+        ),
+      );
+      return;
+    }
 
     final repo = ref.read(orderRepositoryProvider);
     try {
@@ -232,9 +264,9 @@ class CheckoutController extends Notifier<CheckoutState> {
       // Success: release the key/pending record, clear the ordered lines.
       await _persist(null);
       ref.read(cartControllerProvider.notifier).clearFulfilled(
-            sent.restaurantId,
-            [for (final line in sent.lines) line.menuItemId],
-          );
+        sent.restaurantId,
+        [for (final line in sent.lines) line.menuItemId],
+      );
       state = state.copyWith(
         clearPending: true,
         clearError: true,
@@ -252,11 +284,7 @@ class CheckoutController extends Notifier<CheckoutState> {
 
     if (uncertain) {
       // NO order state is known — KEEP the key and snapshot for a safe retry.
-      state = state.copyWith(
-        pending: sent,
-        submitting: false,
-        lastError: exc,
-      );
+      state = state.copyWith(pending: sent, submitting: false, lastError: exc);
       _persist(sent);
       return;
     }

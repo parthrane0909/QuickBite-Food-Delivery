@@ -20,10 +20,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../core/network/api_exception.dart';
 import '../../data/dto/catalog_dto.dart';
 import '../../state/auth_controller.dart';
 import '../../state/cart_controller.dart';
 import '../../state/catalog_providers.dart';
+import '../../state/providers.dart';
 import '../../ui/motion/entrance.dart';
 import '../../ui/motion/shimmer.dart';
 import '../../ui/widgets/async_state_view.dart';
@@ -54,6 +56,10 @@ class ItemDetailScreen extends ConsumerStatefulWidget {
 class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
   int _quantity = 1;
   Restaurant? _restaurant;
+  MenuItem? _resolvedItem;
+  bool _itemLookupStarted = false;
+  bool _itemLookupLoading = false;
+  bool _itemLookupFailed = false;
 
   @override
   void initState() {
@@ -72,6 +78,24 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
       if (mounted && _restaurant == null) setState(() => _restaurant = found);
     } catch (_) {
       // Header/cart fall back to the anonymous restaurant label.
+    }
+  }
+
+  Future<void> _resolveItem() async {
+    if (_itemLookupStarted) return;
+    _itemLookupStarted = true;
+    _itemLookupLoading = true;
+    try {
+      final found = await ref
+          .read(catalogRepositoryProvider)
+          .menuItem(widget.restaurantId, widget.itemId);
+      if (mounted) setState(() => _resolvedItem = found);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _itemLookupFailed = !error.isNotFound);
+    } catch (_) {
+      if (mounted) setState(() => _itemLookupFailed = true);
+    } finally {
+      if (mounted) setState(() => _itemLookupLoading = false);
     }
   }
 
@@ -129,6 +153,10 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
         break;
       }
     }
+    item ??= _resolvedItem;
+    if (item == null && !menuState.initialLoading && !_itemLookupStarted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _resolveItem());
+    }
     // Effectively final copy: keeps promotion (including in the closures
     // below) without non-null assertions.
     final detailItem = item;
@@ -144,19 +172,33 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
           constraints: const BoxConstraints(maxWidth: 880),
           child: CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(child: _Hero(item: item, onBack: _back)),
+              SliverToBoxAdapter(
+                child: _Hero(item: item, onBack: _back),
+              ),
               if (item == null && menuState.initialLoading)
+                const SliverToBoxAdapter(child: _BodySkeleton())
+              else if (item == null &&
+                  (_itemLookupLoading || !_itemLookupStarted))
                 const SliverToBoxAdapter(child: _BodySkeleton())
               else if (item == null)
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: EmptyState(
                     icon: Icons.search_off_rounded,
-                    title: 'Item not found',
-                    message:
-                        'This item is no longer on the menu, or the link is out of date.',
+                    title: _itemLookupFailed
+                        ? 'Could not load this dish'
+                        : 'Item not found',
+                    message: _itemLookupFailed
+                        ? 'Check your connection and try again.'
+                        : 'This item is no longer on the menu, or the link is out of date.',
                     actionLabel: 'Back to menu',
-                    onAction: _back,
+                    onAction: _itemLookupFailed
+                        ? () {
+                            _itemLookupStarted = false;
+                            _itemLookupFailed = false;
+                            setState(() {});
+                          }
+                        : _back,
                   ),
                 )
               else
@@ -476,10 +518,8 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       label,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.2,
-      ),
+      style: Theme.of(context).textTheme.titleMedium
+          ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.2),
     );
   }
 }

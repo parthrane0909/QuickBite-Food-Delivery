@@ -56,20 +56,80 @@ def test_orders_endpoints_require_authentication(client):
     _assert_envelope(detail.json(), code="UNAUTHENTICATED")
 
 
-def test_checkout_is_customer_only(client, admin_token):
+def test_menu_item_deep_link_resolves_item_outside_current_menu_page(client, customer_token):
+    response = client.get(
+        "/api/v1/restaurants/rest_spice_route/menu/item_mango_lassi",
+        headers=auth_header(customer_token),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["id"] == "item_mango_lassi"
+
+    wrong_restaurant = client.get(
+        "/api/v1/restaurants/rest_bella_napoli/menu/item_mango_lassi",
+        headers=auth_header(customer_token),
+    )
+    assert wrong_restaurant.status_code == 404
+    assert (
+        client.get("/api/v1/restaurants/rest_spice_route/menu/item_mango_lassi").status_code == 401
+    )
+
+
+def test_restaurant_search_and_cuisine_filters_are_server_side(client, customer_token):
+    headers = auth_header(customer_token)
+    by_name = client.get(
+        "/api/v1/restaurants",
+        headers=headers,
+        params={"search": "Bella", "page_size": 5},
+    )
+    assert by_name.status_code == 200, by_name.text
+    assert by_name.json()["total"] == 1
+    assert by_name.json()["items"][0]["id"] == "rest_bella_napoli"
+
+    by_dish = client.get(
+        "/api/v1/restaurants",
+        headers=headers,
+        params={"search": "Margherita", "page_size": 5},
+    )
+    assert by_dish.status_code == 200, by_dish.text
+    assert any(row["id"] == "rest_bella_napoli" for row in by_dish.json()["items"])
+
+    by_partial_cuisine = client.get(
+        "/api/v1/restaurants",
+        headers=headers,
+        params={"search": "tali", "page_size": 5},
+    )
+    assert by_partial_cuisine.status_code == 200, by_partial_cuisine.text
+    assert any(row["id"] == "rest_bella_napoli" for row in by_partial_cuisine.json()["items"])
+
+    by_cuisine = client.get(
+        "/api/v1/restaurants",
+        headers=headers,
+        params={"cuisine": "Italian", "page_size": 5},
+    )
+    assert by_cuisine.status_code == 200, by_cuisine.text
+    assert by_cuisine.json()["items"]
+    assert all(row["cuisine"] == "Italian" for row in by_cuisine.json()["items"])
+
+    cuisines = client.get("/api/v1/restaurants/cuisines", headers=headers)
+    assert cuisines.status_code == 200, cuisines.text
+    assert "Italian" in cuisines.json()["items"]
+
+
+def test_admin_can_checkout_as_own_shopping_identity(client, admin_token):
     response = client.post(
         "/api/v1/orders",
         json=_payload(),
         headers={**auth_header(admin_token), "Idempotency-Key": str(uuid.uuid4())},
     )
-    assert response.status_code == 403
-    _assert_envelope(response.json(), code="FORBIDDEN")
+    assert response.status_code == 202, response.text
+    orders = client.get("/api/v1/orders", headers=auth_header(admin_token)).json()["items"]
+    assert any(row["id"] == response.json()["order_id"] for row in orders)
 
 
-def test_order_list_is_customer_only(client, admin_token):
+def test_admin_order_list_is_owner_scoped_shopping_history(client, admin_token):
     response = client.get("/api/v1/orders", headers=auth_header(admin_token))
-    assert response.status_code == 403
-    _assert_envelope(response.json(), code="FORBIDDEN")
+    assert response.status_code == 200, response.text
+    assert all("customer_email" not in row for row in response.json()["items"])
 
 
 def test_customer_cannot_read_another_customers_order(

@@ -1,0 +1,4 @@
+{"ts": "2026-10-18T14:03:16.404+00:00", "level": "INFO", "logger": "quickbite.catalogue", "service": "catalogue-seed", "message": "large catalogue seed complete", "result": "{'restaurants_before': 4, 'restaurants_added': 1996, 'menu_items_added': 15976}"}
+{'restaurants_before': 4, 'restaurants_added': 1996, 'menu_items_added': 15976}
+{"ts": "2026-10-18T14:03:16.818+00:00", "level": "INFO", "logger": "quickbite.catalogue", "service": "catalogue-seed", "message": "large catalogue seed complete", "result": "{'restaurants_before': 2000, 'restaurants_added': 0, 'menu_items_added': 0}"}
+{'restaurants_before': 2000, 'restaurants_added': 0, 'menu_items_added': 0}

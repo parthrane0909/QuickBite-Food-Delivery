@@ -62,4 +62,8 @@ class AdminSummary(BaseModel):
     pending_outbox_events: int = Field(ge=0)
     retry_backlog: int = Field(ge=0)
     quarantine_records: int = Field(ge=0)
+    total_restaurants: int = Field(ge=0, default=0)
+    total_customers: int = Field(ge=0, default=0)
+    total_drivers: int = Field(ge=0, default=0)
+    total_orders: int = Field(ge=0, default=0)
     generated_at: datetime

@@ -5,27 +5,76 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.menu_item import MenuItem
 from app.db.models.restaurant import Restaurant
 
 
-async def count_restaurants(session: AsyncSession) -> int:
-    result = await session.execute(select(func.count()).select_from(Restaurant))
+def _restaurant_filters(*, search: str | None, cuisine: str | None):
+    criteria = [Restaurant.is_available.is_(True)]
+    if search and search.strip():
+        pattern = f"%{search.strip()}%"
+        matching_dish = (
+            select(MenuItem.id)
+            .where(
+                MenuItem.restaurant_id == Restaurant.id,
+                or_(MenuItem.name.ilike(pattern), MenuItem.description.ilike(pattern)),
+            )
+            .exists()
+        )
+        criteria.append(
+            or_(
+                Restaurant.name.ilike(pattern),
+                Restaurant.cuisine.ilike(pattern),
+                matching_dish,
+            )
+        )
+    if cuisine and cuisine.strip():
+        criteria.append(Restaurant.cuisine.ilike(f"%{cuisine.strip()}%"))
+    return criteria
+
+
+async def count_restaurants(
+    session: AsyncSession, *, search: str | None = None, cuisine: str | None = None
+) -> int:
+    stmt = (
+        select(func.count())
+        .select_from(Restaurant)
+        .where(*_restaurant_filters(search=search, cuisine=cuisine))
+    )
+    result = await session.execute(stmt)
     return int(result.scalar_one())
 
 
-async def list_restaurants(session: AsyncSession, *, page: int, page_size: int) -> list[Restaurant]:
+async def list_restaurants(
+    session: AsyncSession,
+    *,
+    page: int,
+    page_size: int,
+    search: str | None = None,
+    cuisine: str | None = None,
+) -> list[Restaurant]:
     # Stable sort: name then id, so pagination never skips/duplicates rows.
     result = await session.execute(
         select(Restaurant)
+        .where(*_restaurant_filters(search=search, cuisine=cuisine))
         .order_by(Restaurant.name.asc(), Restaurant.id.asc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
     return list(result.scalars())
+
+
+async def list_cuisines(session: AsyncSession) -> list[str]:
+    result = await session.execute(
+        select(func.trim(Restaurant.cuisine))
+        .where(Restaurant.is_available.is_(True), Restaurant.cuisine.is_not(None))
+        .distinct()
+        .order_by(func.trim(Restaurant.cuisine))
+    )
+    return [value for (value,) in result if value]
 
 
 async def get_restaurant(session: AsyncSession, restaurant_id: str) -> Restaurant | None:

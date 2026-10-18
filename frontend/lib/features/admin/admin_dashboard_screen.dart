@@ -53,6 +53,28 @@ class AdminDashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Admin overview'),
         actions: [
+          PopupMenuButton<String>(
+            tooltip: 'Admin tools',
+            onSelected: (value) => context.go(value),
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: '/admin/restaurants',
+                child: Text('Manage restaurants'),
+              ),
+              PopupMenuItem(
+                value: '/admin/customers',
+                child: Text('Manage customers'),
+              ),
+              PopupMenuItem(
+                value: '/admin/drivers',
+                child: Text('View drivers'),
+              ),
+              PopupMenuItem(
+                value: '/restaurants',
+                child: Text('Shop as customer'),
+              ),
+            ],
+          ),
           IconButton(
             tooltip: 'Refresh data',
             onPressed: () {
@@ -84,6 +106,33 @@ class AdminDashboardScreen extends ConsumerWidget {
                 _SummarySection(
                   state: summary,
                   onRetry: summaryController.refresh,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => context.go('/admin/restaurants'),
+                      icon: const Icon(Icons.storefront_outlined),
+                      label: const Text('Restaurants & menus'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => context.go('/admin/customers'),
+                      icon: const Icon(Icons.people_outline_rounded),
+                      label: const Text('Customers'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => context.go('/admin/drivers'),
+                      icon: const Icon(Icons.delivery_dining_rounded),
+                      label: const Text('Drivers'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: () => context.go('/restaurants'),
+                      icon: const Icon(Icons.shopping_bag_outlined),
+                      label: const Text('Shop as customer'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 Text(
@@ -179,7 +228,7 @@ class _SummarySection extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Summary',
+                'Operations overview',
                 style: text.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                   letterSpacing: -0.3,
@@ -206,7 +255,7 @@ class _SummarySection extends StatelessWidget {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    'Read-only',
+                    'PostgreSQL',
                     style: text.labelSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                       color: AppColors.inkSoft,
@@ -223,34 +272,92 @@ class _SummarySection extends StatelessWidget {
           style: text.labelSmall,
         ),
         const SizedBox(height: AppSpacing.md),
-        // Responsive stat grid: cards fill the row evenly (1–4 per row)
-        // instead of leaving a ragged fixed-width tail.
+        Text('Workspace', style: text.titleLarge),
+        const SizedBox(height: AppSpacing.sm),
         LayoutBuilder(
           builder: (context, constraints) {
             const spacing = AppSpacing.md;
-            final columns = (constraints.maxWidth / 190).floor().clamp(1, 4);
+            final columns = (constraints.maxWidth / 210).floor().clamp(1, 4);
             final cardWidth =
                 (constraints.maxWidth - spacing * (columns - 1)) / columns;
             return Wrap(
               spacing: spacing,
               runSpacing: spacing,
               children: [
-                for (final status in OrderStatus.values)
-                  _StatCard(
-                    width: cardWidth,
-                    label: status.label,
-                    value: '${summary.countFor(status)}',
-                    tint: status.isFailure
-                        ? AppColors.dangerTint
-                        : status.isSuccess
-                        ? AppColors.successTint
-                        : AppColors.surfaceWarm,
-                    valueColor: status.isFailure
-                        ? AppColors.danger
-                        : status.isSuccess
-                        ? AppColors.success
-                        : AppColors.ink,
+                _StatCard(
+                  width: cardWidth,
+                  label: 'Total Restaurants',
+                  value: '${summary.totalRestaurants}',
+                  tint: AppColors.primaryTint,
+                  valueColor: AppColors.primaryDark,
+                  onTap: () => context.go('/admin/restaurants'),
+                ),
+                _StatCard(
+                  width: cardWidth,
+                  label: 'Total Customers',
+                  value: '${summary.totalCustomers}',
+                  tint: AppColors.infoTint,
+                  valueColor: AppColors.info,
+                  onTap: () => context.go('/admin/customers'),
+                ),
+                _StatCard(
+                  width: cardWidth,
+                  label: 'Total Drivers',
+                  value: '${summary.totalDrivers}',
+                  tint: AppColors.successTint,
+                  valueColor: AppColors.success,
+                  onTap: () => context.go('/admin/drivers'),
+                ),
+                _StatCard(
+                  width: cardWidth,
+                  label: 'Total Orders',
+                  value: '${summary.totalOrders}',
+                  tint: AppColors.surfaceWarm,
+                  valueColor: AppColors.ink,
+                  onTap: () => context.go('/admin'),
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text('Order status', style: text.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final status in OrderStatus.values)
+              Chip(
+                avatar: CircleAvatar(
+                  radius: 13,
+                  backgroundColor: status.isFailure
+                      ? AppColors.dangerTint
+                      : status.isSuccess
+                      ? AppColors.successTint
+                      : AppColors.surfaceWarm,
+                  child: Text(
+                    '${summary.countFor(status)}',
+                    style: const TextStyle(fontSize: 11),
                   ),
+                ),
+                label: Text(status.label),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text('Processing health', style: text.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const spacing = AppSpacing.md;
+            final columns = (constraints.maxWidth / 210).floor().clamp(1, 3);
+            final cardWidth =
+                (constraints.maxWidth - spacing * (columns - 1)) / columns;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: [
                 _StatCard(
                   width: cardWidth,
                   label: 'Pending outbox events',
@@ -284,7 +391,7 @@ class _SummarySection extends StatelessWidget {
           'Counts come straight from PostgreSQL. Outbox = events not yet '
           'confirmed published; retry backlog = scheduled attempts neither '
           'published nor exhausted; quarantine = terminally failed '
-          'deliveries. This dashboard is read-only.',
+          'deliveries. Total drivers counts distinct driver identities with at least one persisted assignment.',
           style: text.bodySmall,
         ),
       ],
@@ -300,6 +407,7 @@ class _StatCard extends StatelessWidget {
     required this.valueColor,
     this.subtitle,
     this.width = 168,
+    this.onTap,
   });
 
   final String label;
@@ -308,6 +416,7 @@ class _StatCard extends StatelessWidget {
   final Color tint;
   final Color valueColor;
   final double width;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -315,34 +424,38 @@ class _StatCard extends StatelessWidget {
     return SizedBox(
       width: width,
       child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: 2,
-                ),
-                decoration: BoxDecoration(
-                  color: tint,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                ),
-                child: Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: valueColor,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: tint,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                  ),
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: valueColor,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(label, style: text.labelMedium, maxLines: 2),
-              if (subtitle != null) Text(subtitle!, style: text.labelSmall),
-            ],
+                const SizedBox(height: AppSpacing.sm),
+                Text(label, style: text.labelMedium, maxLines: 2),
+                if (subtitle != null) Text(subtitle!, style: text.labelSmall),
+              ],
+            ),
           ),
         ),
       ),
@@ -402,7 +515,7 @@ class _OrdersSection extends StatelessWidget {
             index: i,
             child: _AdminOrderCard(
               order: state.items[i],
-              onTap: () => context.push('/orders/${state.items[i].id}'),
+              onTap: () => context.push('/admin/orders/${state.items[i].id}'),
             ),
           ),
           const SizedBox(height: AppSpacing.cardGap),

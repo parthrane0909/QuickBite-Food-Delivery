@@ -151,6 +151,7 @@ abstract final class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
+      fontFamily: _uiFamily,
       colorScheme: scheme,
       splashFactory: InkSparkle.splashFactory,
       splashColor: AppColors.primaryTint,

@@ -76,6 +76,17 @@ async def require_customer(user: CurrentUserDep) -> User:
     return user
 
 
+async def require_shopper(user: CurrentUserDep) -> User:
+    """Customer endpoints also serve an admin's own account in shopping mode.
+
+    Identity and ownership remain derived from the same bearer token; this
+    grants no cross-customer reads and no role changes.
+    """
+    if user.role not in {"customer", "admin"}:
+        raise ForbiddenError("This endpoint requires an authenticated shopper.")
+    return user
+
+
 async def require_admin(user: CurrentUserDep) -> User:
     if user.role != "admin":
         raise ForbiddenError("This endpoint requires an admin account.")
@@ -83,4 +94,5 @@ async def require_admin(user: CurrentUserDep) -> User:
 
 
 CustomerDep = Annotated[User, Depends(require_customer)]
+ShopperDep = Annotated[User, Depends(require_shopper)]
 AdminDep = Annotated[User, Depends(require_admin)]

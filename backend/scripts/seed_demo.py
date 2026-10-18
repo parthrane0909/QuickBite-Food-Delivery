@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.core.security import hash_password
+from app.db.models.driver import Driver
 from app.db.models.menu_item import MenuItem
 from app.db.models.restaurant import Restaurant
 from app.db.models.user import User
@@ -81,6 +82,7 @@ SEED_RESTAURANTS: list[dict[str, Any]] = [
     {
         "id": "rest_spice_route",
         "name": "Spice Route Kitchen",
+        "cuisine": "North Indian",
         "description": "North Indian classics, slow-simmered curries and tandoor breads.",
         "items": [
             (
@@ -136,6 +138,7 @@ SEED_RESTAURANTS: list[dict[str, Any]] = [
     {
         "id": "rest_coastal_catch",
         "name": "Coastal Catch",
+        "cuisine": "Seafood",
         "description": "Coastal seafood curries, grills and fry-ups.",
         "items": [
             (
@@ -177,6 +180,7 @@ SEED_RESTAURANTS: list[dict[str, Any]] = [
     {
         "id": "rest_bella_napoli",
         "name": "Bella Napoli",
+        "cuisine": "Italian",
         "description": "Wood-fired pizzas and Roman-style pasta.",
         "items": [
             (
@@ -225,6 +229,7 @@ SEED_RESTAURANTS: list[dict[str, Any]] = [
     {
         "id": "rest_sweet_crumb",
         "name": "Sweet Crumb Patisserie",
+        "cuisine": "Bakery & Desserts",
         "description": "Small-batch cakes, pastries and specialty coffee.",
         "items": [
             (
@@ -311,6 +316,17 @@ async def seed_all(session: AsyncSession, *, reset_passwords: bool = False) -> d
             counts["users_updated"] += 1
     await session.flush()
 
+    for driver_data in SEED_DRIVERS:
+        driver = await session.get(Driver, driver_data["driver_id"])
+        if driver is None:
+            session.add(
+                Driver(
+                    id=driver_data["driver_id"],
+                    full_name=driver_data["driver_name"],
+                    is_active=True,
+                )
+            )
+
     for restaurant_data in SEED_RESTAURANTS:
         restaurant = await session.get(Restaurant, restaurant_data["id"])
         if restaurant is None:
@@ -318,6 +334,7 @@ async def seed_all(session: AsyncSession, *, reset_passwords: bool = False) -> d
                 id=restaurant_data["id"],
                 name=restaurant_data["name"],
                 description=restaurant_data["description"],
+                cuisine=restaurant_data["cuisine"],
                 currency="INR",
                 is_available=True,
                 image_asset=_image_asset(restaurant_data["id"]),
@@ -326,6 +343,7 @@ async def seed_all(session: AsyncSession, *, reset_passwords: bool = False) -> d
         else:
             restaurant.name = restaurant_data["name"]
             restaurant.description = restaurant_data["description"]
+            restaurant.cuisine = restaurant_data["cuisine"]
             restaurant.is_available = True
             restaurant.image_asset = _image_asset(restaurant_data["id"])
         counts["restaurants"] += 1

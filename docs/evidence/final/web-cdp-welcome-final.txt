@@ -1,0 +1,9 @@
+{
+  "requested_url": "http://localhost:8080/",
+  "href": "http://localhost:8080/welcome",
+  "labels": [
+    "A cheeseburger with fresh lettuce"
+  ],
+  "inputs": [],
+  "screenshot": "after-web/cold-root.png"
+}

@@ -26,20 +26,38 @@ Base path: `/api/v1` (health probes are unversioned: `/health/live`,
 | --- | --- | --- |
 | `POST /api/v1/auth/login` | Public | `{email, password}` → bearer token, expiry, role, user summary |
 | `GET /api/v1/me` | Signed in | Current profile and role |
-| `GET /api/v1/restaurants` | Signed in | Paginated restaurant list |
+| `GET /api/v1/restaurants` | Signed in | Paginated restaurant list; case-insensitive partial `search` matches restaurant names, cuisine names, dish names and dish descriptions; optional partial `cuisine` filter combines with search |
+| `GET /api/v1/restaurants/cuisines` | Signed in | Sorted distinct cuisines for the discovery category rail |
 | `GET /api/v1/restaurants/{id}/menu` | Signed in | Paginated menu with authoritative minor-unit prices (unavailable items are listed with `is_available: false`) |
-| `POST /api/v1/orders` | Customer | Idempotent checkout → `202` + `Location` |
-| `GET /api/v1/orders` | Customer | Paginated **own** orders; optional exact `status` filter (invalid value → 422) |
+| `GET /api/v1/restaurants/{id}/menu/{item_id}` | Signed in | Direct menu-item lookup for deep links, independent of menu page |
+| `POST /api/v1/orders` | Customer or admin shopping identity | Idempotent checkout → `202` + `Location` |
+| `GET /api/v1/orders` | Customer or admin shopping identity | Paginated **own** orders; optional exact `status` filter (invalid value → 422) |
 | `GET /api/v1/orders/{id}` | Owner or admin | Current state, items, totals, failure details, version, timestamps |
 | `GET /api/v1/orders/{id}/history` | Owner or admin | Append-only, version-ordered transition timeline (single page; history is bounded at 7 entries by the state machine) |
 | `GET /api/v1/orders/{id}/notifications` | Owner or admin | Paginated notification timeline for the order (see below) |
 | `GET /api/v1/admin/orders` | Admin | Paginated **cross-customer** order list; each row adds `customer_email` to the shared order-summary shape. Optional exact `status` filter (invalid value → 422) |
 | `GET /api/v1/admin/summary` | Admin | Operations snapshot: `orders_by_status` (all six statuses, zeros included), `pending_outbox_events`, `retry_backlog`, `quarantine_records`, `generated_at` (DB clock) |
+| `GET /api/v1/admin/orders/{id}` | Admin | Read-only order, item-price snapshots, customer, driver and status history |
+| `/api/v1/admin/restaurants`, `/api/v1/admin/restaurants/{id}` | Admin | Paginated/searchable restaurant management; create, patch, deactivate, view menu and computed order/customer/activity metrics |
+| `/api/v1/admin/restaurants/{id}/menu`, `/api/v1/admin/menu-items/{id}` | Admin | Paginated menu management; create, edit, deactivate without changing historical order snapshots |
+| `/api/v1/admin/customers`, `/api/v1/admin/customers/{id}` | Admin | Paginated customer management with order count and last-order time, secure customer creation/deactivation and profile update |
+| `GET /api/v1/admin/customers/{id}/orders` | Admin | Customer-owned order summaries; inspect each via the read-only order detail route |
+| `GET /api/v1/admin/drivers` | Admin | Persistent fictional driver roster and assignment counts |
 
-Admin responses expose counters only — never tokens, password material or
-outbox payload bodies. Customers get `403` and anonymous callers `401`,
-matching the role guards used everywhere else. The read-only admin dashboard
-in the Flutter app consumes exactly these two endpoints.
+Admin mutations are recorded in `admin_audit_logs` as actor, action, target,
+timestamp and changed field names. Password values and hashes are never
+returned or recorded. Driver totals mean rows in the persistent `drivers`
+roster (currently six seeded demo drivers); assigned-order counts are separate.
+
+The large showcase catalogue is opt-in and never loaded at startup:
+`docker compose exec api python -m scripts.seed_large_catalogue`. It inserts
+stable `showcase_` IDs in batches, can be repeated safely, and preserves demo
+fixtures, users, orders and order-item snapshots.
+
+Admin management responses never expose tokens, password material or outbox
+payload bodies. Customers get `403` and anonymous callers `401`, matching the
+role guards used everywhere else. The original read-only order and operational
+overview remains available alongside the additive management endpoints.
 
 ## Notifications: `GET /api/v1/orders/{id}/notifications`
 

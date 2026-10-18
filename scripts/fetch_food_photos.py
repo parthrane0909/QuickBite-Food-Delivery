@@ -24,9 +24,11 @@ Sources validated reachable from this environment (2026-07):
   * Wikimedia Commons API (license metadata embedded per file)
   * images.unsplash.com direct photo ids (Unsplash License)
 """
+
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import re
@@ -50,6 +52,24 @@ JPEG_QUALITY = 82
 
 # (entity id, search query) — queries tuned to the seeded catalog.
 ENTITIES: list[tuple[str, str]] = [
+    # Cuisine-family catalogue imagery is shared by showcase records so the
+    # 16k-row catalogue does not inflate the Flutter bundle with duplicates.
+    ("family_north_indian", "north indian thali curry food"),
+    ("family_south_indian", "dosa"),
+    ("family_italian", "italian pasta pizza food"),
+    ("family_chinese", "chinese noodles stir fry meal"),
+    ("family_indo_chinese", "Manchurian cauliflower"),
+    ("family_thai", "thai green curry noodles food"),
+    ("family_japanese_inspired", "ramen"),
+    ("family_mediterranean", "falafel"),
+    ("family_burgers", "hamburger cheeseburger fries food"),
+    ("family_bakery", "croissant pastry bakery food"),
+    ("family_seafood", "prawns seafood"),
+    ("family_desserts", "dessert cake tart chocolate food"),
+    ("family_biryani", "chicken biryani rice indian food"),
+    ("family_sandwiches", "sandwich panini deli food"),
+    ("family_healthy_bowls", "quinoa bowl"),
+    ("family_korean_inspired", "korean bibimbap rice bowl food"),
     # --- restaurants (used as hero/wide imagery) ---
     ("rest_spice_route", "north indian thali food"),
     ("rest_coastal_catch", "grilled seafood platter"),
@@ -88,9 +108,9 @@ ENTITIES: list[tuple[str, str]] = [
 OK_LICENCE = re.compile(
     r"^(cc0|cc[ -]by(?:[ -]sa)?(?:[ -]\d\.\d)?|public domain|pd|pd-self|"
     r"attribution|no restrictions)",
-    re.I,
+    re.IGNORECASE,
 )
-BAD_LICENCE = re.compile(r"(non.?commercial|nc\b|fair use|nonfree|non-free)", re.I)
+BAD_LICENCE = re.compile(r"(non.?commercial|nc\b|fair use|nonfree|non-free)", re.IGNORECASE)
 
 
 def _get(url: str, timeout: int) -> bytes:
@@ -169,13 +189,10 @@ def commons_search(query: str, limit: int = 8) -> list[dict]:
                 "page": f"https://commons.wikimedia.org/wiki/"
                 f"{urllib.parse.quote(page.get('title', '').replace(' ', '_'))}",
                 "thumb": thumb,
-                "artist": _strip_html(
-                    meta.get("Artist", {}).get("value", "")
-                ) or "Unknown",
+                "artist": _strip_html(meta.get("Artist", {}).get("value", ""))
+                or "Unknown",
                 "licence": licence or "Unknown",
-                "licence_url": _strip_html(
-                    meta.get("LicenseUrl", {}).get("value", "")
-                ),
+                "licence_url": _strip_html(meta.get("LicenseUrl", {}).get("value", "")),
                 "query": query,
                 "orig_w": width,
                 "orig_h": height,
@@ -185,10 +202,7 @@ def commons_search(query: str, limit: int = 8) -> list[dict]:
 
 
 def unsplash_download(photo_id: str) -> bytes:
-    url = (
-        f"https://images.unsplash.com/{photo_id}"
-        f"?w=1600&q=85&fm=jpg&fit=max"
-    )
+    url = f"https://images.unsplash.com/{photo_id}?w=1600&q=85&fm=jpg&fit=max"
     return _download(url)
 
 
@@ -214,6 +228,11 @@ def main() -> int:
         action="store_true",
         help="print candidate search results (with size) instead of downloading",
     )
+    parser.add_argument(
+        "--refresh-manifest",
+        action="store_true",
+        help="update local paths, optimized dimensions, and checksums without downloads",
+    )
     args = parser.parse_args()
 
     overrides = {}
@@ -231,6 +250,49 @@ def main() -> int:
     if CREDITS_JSON.exists():
         credits = json.loads(CREDITS_JSON.read_text())
 
+    if args.refresh_manifest:
+        for entity_id, record in credits.items():
+            if (
+                not record.get("licence_url")
+                and "public domain" in str(record.get("licence", "")).lower()
+            ):
+                # Commons uses source-page release statements for some
+                # author-released public-domain works instead of a canonical
+                # license URL; retain that exact page as the rights reference.
+                record["licence_url"] = record.get("page", "")
+            path = OUT_DIR / f"{entity_id}.jpg"
+            if not path.exists():
+                path = OUT_DIR / f"{entity_id}.png"
+            if not path.exists():
+                print(f"  ! missing local asset: {path.name}")
+                return 1
+            with Image.open(path) as image:
+                width, height = image.size
+            record.update(
+                {
+                    "asset_id": entity_id,
+                    "local_asset": f"assets/food/{path.name}",
+                    "original_url": record.get("original_url")
+                    or record.get("url")
+                    or record.get("thumb"),
+                    "modifications": record.get("transformations")
+                    or (
+                        "Converted to RGB JPEG; resized to max 1400px wide; "
+                        "quality 82 progressive/optimized compression."
+                        if path.suffix.lower() == ".jpg"
+                        else "PNG retained with its original alpha channel."
+                    ),
+                    "width": width,
+                    "height": height,
+                    "bytes": path.stat().st_size,
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                }
+            )
+        CREDITS_JSON.write_text(json.dumps(credits, indent=2, sort_keys=True) + "\n")
+        _write_credits_md(credits)
+        print(f"updated {len(credits)} attribution records; no images downloaded")
+        return 0
+
     fetched = skipped = failed = 0
     for entity_id, query in entities:
         dest = OUT_DIR / f"{entity_id}.jpg"
@@ -246,7 +308,9 @@ def main() -> int:
         if args.candidates:
             print(f"\n{entity_id}  <- {query}")
             for i, c in enumerate(commons_search(query, limit=8)):
-                print(f"   [{i}] {c['title']}  ({c.get('orig_w', '?')}x{c.get('orig_h', '?')})  {c['licence']}")
+                print(
+                    f"   [{i}] {c['title']}  ({c.get('orig_w', '?')}x{c.get('orig_h', '?')})  {c['licence']}"
+                )
             continue
 
         record = None
@@ -286,6 +350,12 @@ def main() -> int:
             failed += 1
             continue
 
+        if (
+            not record.get("licence_url")
+            and "public domain" in str(record.get("licence", "")).lower()
+        ):
+            record["licence_url"] = record.get("page", "")
+
         try:
             width, height = save_image(raw, dest)
         except Exception as exc:  # noqa: BLE001
@@ -296,10 +366,20 @@ def main() -> int:
         record["bytes"] = dest.stat().st_size
         record["width"] = width
         record["height"] = height
+        record["asset_id"] = entity_id
+        record["local_asset"] = f"assets/food/{dest.name}"
+        record["original_url"] = record.get("thumb")
+        record["modifications"] = (
+            "Converted to RGB JPEG; resized to max 1400px wide; "
+            "quality 82 progressive/optimized compression."
+        )
+        record["sha256"] = hashlib.sha256(dest.read_bytes()).hexdigest()
         credits[entity_id] = record
         fetched += 1
-        print(f"  + {entity_id}.jpg  {width}x{height}  "
-              f"[{record['licence']}] {record['title'][:60]}")
+        print(
+            f"  + {entity_id}.jpg  {width}x{height}  "
+            f"[{record['licence']}] {record['title'][:60]}"
+        )
 
     CREDITS_JSON.write_text(json.dumps(credits, indent=2, sort_keys=True) + "\n")
     _write_credits_md(credits)

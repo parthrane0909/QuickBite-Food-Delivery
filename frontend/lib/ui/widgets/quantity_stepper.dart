@@ -31,9 +31,12 @@ class QuantityStepper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final canAdd = quantity < max;
-    final size = dense ? 30.0 : 36.0;
+    const size = 48.0;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.xs),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xs,
+        vertical: AppSpacing.xs,
+      ),
       decoration: BoxDecoration(
         color: AppColors.peach,
         borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
@@ -51,7 +54,7 @@ class QuantityStepper extends StatelessWidget {
             label: 'Quantity $quantity',
             liveRegion: true,
             child: SizedBox(
-              width: dense ? 28 : 34,
+              width: dense ? 24 : 34,
               child: Text(
                 '$quantity',
                 textAlign: TextAlign.center,

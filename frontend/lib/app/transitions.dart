@@ -18,73 +18,74 @@ CustomTransitionPage<T> fadeSlidePage<T>({
   required Widget child,
   Offset begin = const Offset(0, 0.05),
   Duration duration = AppMotion.base,
-}) =>
-    CustomTransitionPage<T>(
-      key: key,
-      child: child,
-      transitionDuration: duration,
-      reverseTransitionDuration: AppMotion.fast,
-      transitionsBuilder: (context, animation, secondary, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: AppMotion.emphasized,
-          reverseCurve: AppMotion.easeOut,
-        );
-        return FadeTransition(
-          opacity: curved,
-          child: SlideTransition(
-            position: Tween<Offset>(begin: begin, end: Offset.zero)
-                .animate(curved),
-            child: child,
-          ),
-        );
-      },
+}) => CustomTransitionPage<T>(
+  key: key,
+  child: child,
+  transitionDuration: duration,
+  reverseTransitionDuration: AppMotion.fast,
+  transitionsBuilder: (context, animation, secondary, child) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: AppMotion.emphasized,
+      reverseCurve: AppMotion.easeOut,
     );
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween<Offset>(begin: begin, end: Offset.zero).animate(curved),
+        child: child,
+      ),
+    );
+  },
+);
 
 /// Calm crossfade for onboarding-style moments (no directional motion).
 CustomTransitionPage<T> fadePage<T>({
   required LocalKey key,
   required Widget child,
-  Duration duration = AppMotion.hero,
-}) =>
-    CustomTransitionPage<T>(
-      key: key,
-      child: child,
-      transitionDuration: duration,
-      reverseTransitionDuration: AppMotion.base,
-      transitionsBuilder: (_, animation, _, child) => FadeTransition(
-        opacity: CurvedAnimation(
-          parent: animation,
-          curve: AppMotion.easeOut,
-          reverseCurve: AppMotion.easeOut,
+  Duration duration = AppMotion.base,
+}) => CustomTransitionPage<T>(
+  key: key,
+  child: child,
+  transitionDuration: duration,
+  reverseTransitionDuration: AppMotion.base,
+  transitionsBuilder: (context, animation, _, child) =>
+      MediaQuery.disableAnimationsOf(context)
+      ? child
+      : FadeTransition(
+          opacity: CurvedAnimation(
+            parent: animation,
+            curve: AppMotion.easeOut,
+            reverseCurve: AppMotion.easeOut,
+          ),
+          child: child,
         ),
-        child: child,
-      ),
-    );
+);
 
 /// Rise-up presentation (item detail, filters) — feels like a sheet.
 CustomTransitionPage<T> risePage<T>({
   required LocalKey key,
   required Widget child,
-  Duration duration = AppMotion.slow,
-}) =>
-    CustomTransitionPage<T>(
-      key: key,
-      child: child,
-      transitionDuration: duration,
-      reverseTransitionDuration: AppMotion.fast,
-      transitionsBuilder: (context, animation, secondary, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: AppMotion.emphasized,
-          reverseCurve: AppMotion.easeOut,
-        );
-        return SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 0.08),
-            end: Offset.zero,
-          ).animate(curved),
-          child: FadeTransition(opacity: curved, child: child),
-        );
-      },
+  Duration duration = AppMotion.base,
+}) => CustomTransitionPage<T>(
+  key: key,
+  child: child,
+  transitionDuration: duration,
+  reverseTransitionDuration: AppMotion.fast,
+  transitionsBuilder: (context, animation, secondary, child) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: AppMotion.emphasized,
+      reverseCurve: AppMotion.easeOut,
     );
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(0, 0.08),
+        end: Offset.zero,
+      ).animate(curved),
+      child: FadeTransition(opacity: curved, child: child),
+    );
+  },
+);

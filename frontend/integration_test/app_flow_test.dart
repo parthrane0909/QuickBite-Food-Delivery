@@ -33,10 +33,13 @@ void main() {
     // "Continue with email" leads to the login form.
     await _waitFor(
       tester,
-      find.textContaining('Great food, from kitchens near you.'),
+      find.textContaining('Welcome to'),
       label: 'welcome screen',
     );
-    final welcomeSignIn = find.widgetWithText(FilledButton, 'Continue with email');
+    final welcomeSignIn = find.widgetWithText(
+      FilledButton,
+      'Continue with email',
+    );
     await _scrollIntoView(tester, welcomeSignIn);
     await tester.tap(welcomeSignIn);
 
@@ -55,7 +58,11 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Sign In'));
 
     // ---- 2. Browse the seeded catalog ------------------------------------
-    // Sorted by name: Bella Napoli is the first card.
+    // The showcase catalogue is paginated by name; find the protected fixture
+    // through the real API search instead of assuming page one contains it.
+    await _waitFor(tester, find.byType(TextField), label: 'restaurant search');
+    await tester.enterText(find.byType(TextField).first, 'Bella Napoli');
+    await tester.pump(const Duration(milliseconds: 500));
     await _waitFor(tester, find.text('Bella Napoli'), label: 'restaurant list');
     await tester.tap(find.text('Bella Napoli'));
 

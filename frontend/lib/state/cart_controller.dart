@@ -13,11 +13,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/dto/catalog_dto.dart';
+import 'auth_controller.dart';
 
 const int kQuantityMin = 1;
 const int kQuantityMax = 20; // backend QUANTITY_MAX
 const int kMaxDistinctItems = 20; // backend MAX_DISTINCT_ITEMS
-const String _cartPrefsKey = 'quickbite.cart.v1';
+const String _cartPrefsPrefix = 'quickbite.cart.v1.';
 
 class CartLine {
   const CartLine({
@@ -45,34 +46,34 @@ class CartLine {
   int get lineTotalMinor => priceMinor * quantity;
 
   CartLine withQuantity(int quantity) => CartLine(
-        menuItemId: menuItemId,
-        name: name,
-        priceMinor: priceMinor,
-        currency: currency,
-        isAvailable: isAvailable,
-        quantity: quantity,
-        imageAsset: imageAsset,
-      );
+    menuItemId: menuItemId,
+    name: name,
+    priceMinor: priceMinor,
+    currency: currency,
+    isAvailable: isAvailable,
+    quantity: quantity,
+    imageAsset: imageAsset,
+  );
 
   Map<String, dynamic> toJson() => {
-        'menu_item_id': menuItemId,
-        'name': name,
-        'price_minor': priceMinor,
-        'currency': currency,
-        'is_available': isAvailable,
-        'quantity': quantity,
-        'image_asset': imageAsset,
-      };
+    'menu_item_id': menuItemId,
+    'name': name,
+    'price_minor': priceMinor,
+    'currency': currency,
+    'is_available': isAvailable,
+    'quantity': quantity,
+    'image_asset': imageAsset,
+  };
 
   factory CartLine.fromJson(Map<String, dynamic> json) => CartLine(
-        menuItemId: json['menu_item_id'] as String,
-        name: json['name'] as String,
-        priceMinor: json['price_minor'] as int,
-        currency: json['currency'] as String,
-        isAvailable: json['is_available'] as bool? ?? true,
-        quantity: json['quantity'] as int,
-        imageAsset: json['image_asset'] as String?,
-      );
+    menuItemId: json['menu_item_id'] as String,
+    name: json['name'] as String,
+    priceMinor: json['price_minor'] as int,
+    currency: json['currency'] as String,
+    isAvailable: json['is_available'] as bool? ?? true,
+    quantity: json['quantity'] as int,
+    imageAsset: json['image_asset'] as String?,
+  );
 }
 
 class CartState {
@@ -90,7 +91,8 @@ class CartState {
 
   bool get isEmpty => lines.isEmpty;
   int get itemCount => lines.fold(0, (sum, line) => sum + line.quantity);
-  int get subtotalMinor => lines.fold(0, (sum, line) => sum + line.lineTotalMinor);
+  int get subtotalMinor =>
+      lines.fold(0, (sum, line) => sum + line.lineTotalMinor);
   String get currency => lines.isEmpty ? 'INR' : lines.first.currency;
 
   CartLine? line(String menuItemId) {
@@ -102,26 +104,40 @@ class CartState {
 }
 
 /// Outcome of `add` — the screen maps each case to UI (dialog/snackbar).
-enum CartAddResult { added, restaurantConflict, tooManyDistinctItems, quantityMaxed }
+enum CartAddResult {
+  added,
+  restaurantConflict,
+  tooManyDistinctItems,
+  quantityMaxed,
+}
 
 class CartController extends Notifier<CartState> {
+  String? _userId;
+
   @override
   CartState build() {
-    _restoreDraft();
+    final id = ref.watch(
+      authControllerProvider.select((auth) => auth.session?.user.id),
+    );
+    _userId = id == null || id.isEmpty ? null : id;
+    if (_userId case final userId?) _restoreDraft(userId);
     return CartState.empty;
   }
 
-  Future<void> _restoreDraft() async {
+  Future<void> _restoreDraft(String userId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_cartPrefsKey);
+      final raw = prefs.getString('$_cartPrefsPrefix$userId');
       if (raw == null || raw.isEmpty) return;
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
       final lines = (decoded['lines'] as List<dynamic>? ?? [])
           .map((raw) => CartLine.fromJson(raw as Map<String, dynamic>))
-          .where((line) => line.quantity >= kQuantityMin && line.quantity <= kQuantityMax)
+          .where(
+            (line) =>
+                line.quantity >= kQuantityMin && line.quantity <= kQuantityMax,
+          )
           .toList();
-      if (!ref.mounted || lines.isEmpty) return;
+      if (!ref.mounted || _userId != userId || lines.isEmpty) return;
       state = CartState(
         restaurantId: decoded['restaurant_id'] as String?,
         restaurantName: decoded['restaurant_name'] as String?,
@@ -133,16 +149,21 @@ class CartController extends Notifier<CartState> {
   }
 
   void _persist() {
+    final userId = _userId;
+    if (userId == null) return;
     // Fire-and-forget: a draft save failure must never break the UI.
-    SharedPreferences.getInstance().then((prefs) {
-      final payload = jsonEncode({
-        'restaurant_id': state.restaurantId,
-        'restaurant_name': state.restaurantName,
-        'lines': state.lines.map((line) => line.toJson()).toList(),
-        'saved_at': DateTime.now().toUtc().toIso8601String(),
-      });
-      return prefs.setString(_cartPrefsKey, payload);
-    }).catchError((Object _) => false);
+    SharedPreferences.getInstance()
+        .then((prefs) {
+          final payload = jsonEncode({
+            'restaurant_id': state.restaurantId,
+            'restaurant_name': state.restaurantName,
+            'lines': state.lines.map((line) => line.toJson()).toList(),
+            'saved_at': DateTime.now().toUtc().toIso8601String(),
+          });
+          if (!ref.mounted || _userId != userId) return false;
+          return prefs.setString('$_cartPrefsPrefix$userId', payload);
+        })
+        .catchError((Object _) => false);
   }
 
   void _update(CartState next) {
@@ -164,36 +185,40 @@ class CartController extends Notifier<CartState> {
     final existing = state.line(item.id);
     if (existing != null) {
       if (existing.quantity >= kQuantityMax) return CartAddResult.quantityMaxed;
-      _update(state.copyWith(
-        lines: [
-          for (final line in state.lines)
-            if (line.menuItemId == item.id)
-              line.withQuantity(existing.quantity + 1)
-            else
-              line,
-        ],
-      ));
+      _update(
+        state.copyWith(
+          lines: [
+            for (final line in state.lines)
+              if (line.menuItemId == item.id)
+                line.withQuantity(existing.quantity + 1)
+              else
+                line,
+          ],
+        ),
+      );
       return CartAddResult.added;
     }
     if (state.lines.length >= kMaxDistinctItems) {
       return CartAddResult.tooManyDistinctItems;
     }
-    _update(CartState(
-      restaurantId: restaurantId,
-      restaurantName: restaurantName,
-      lines: [
-        ...state.lines,
-        CartLine(
-          menuItemId: item.id,
-          name: item.name,
-          priceMinor: item.priceMinor,
-          currency: item.currency,
-          isAvailable: item.isAvailable,
-          quantity: kQuantityMin,
-          imageAsset: item.imageAsset,
-        ),
-      ],
-    ));
+    _update(
+      CartState(
+        restaurantId: restaurantId,
+        restaurantName: restaurantName,
+        lines: [
+          ...state.lines,
+          CartLine(
+            menuItemId: item.id,
+            name: item.name,
+            priceMinor: item.priceMinor,
+            currency: item.currency,
+            isAvailable: item.isAvailable,
+            quantity: kQuantityMin,
+            imageAsset: item.imageAsset,
+          ),
+        ],
+      ),
+    );
     return CartAddResult.added;
   }
 
@@ -205,7 +230,11 @@ class CartController extends Notifier<CartState> {
     required String restaurantName,
   }) {
     clear();
-    return add(item, restaurantId: restaurantId, restaurantName: restaurantName);
+    return add(
+      item,
+      restaurantId: restaurantId,
+      restaurantName: restaurantName,
+    );
   }
 
   void setQuantity(String menuItemId, int quantity) {
@@ -216,12 +245,17 @@ class CartController extends Notifier<CartState> {
       return;
     }
     if (quantity > kQuantityMax) return;
-    _update(state.copyWith(
-      lines: [
-        for (final line in state.lines)
-          if (line.menuItemId == menuItemId) line.withQuantity(quantity) else line,
-      ],
-    ));
+    _update(
+      state.copyWith(
+        lines: [
+          for (final line in state.lines)
+            if (line.menuItemId == menuItemId)
+              line.withQuantity(quantity)
+            else
+              line,
+        ],
+      ),
+    );
   }
 
   void increment(String menuItemId) {
@@ -237,9 +271,13 @@ class CartController extends Notifier<CartState> {
   }
 
   void remove(String menuItemId) {
-    _update(state.copyWith(
-      lines: state.lines.where((line) => line.menuItemId != menuItemId).toList(),
-    ));
+    _update(
+      state.copyWith(
+        lines: state.lines
+            .where((line) => line.menuItemId != menuItemId)
+            .toList(),
+      ),
+    );
   }
 
   void clear() {
@@ -251,18 +289,21 @@ class CartController extends Notifier<CartState> {
   /// survive for a fresh attempt (and a completely different cart, e.g.
   /// another restaurant started meanwhile, is left untouched).
   void clearFulfilled(String restaurantId, List<String> fulfilledItemIds) {
-    final remaining =
-        state.lines.where((line) => !fulfilledItemIds.contains(line.menuItemId)).toList();
+    final remaining = state.lines
+        .where((line) => !fulfilledItemIds.contains(line.menuItemId))
+        .toList();
     if (remaining.isEmpty) {
       _update(CartState.empty);
       return;
     }
     if (state.restaurantId == restaurantId) {
-      _update(CartState(
-        restaurantId: state.restaurantId,
-        restaurantName: state.restaurantName,
-        lines: remaining,
-      ));
+      _update(
+        CartState(
+          restaurantId: state.restaurantId,
+          restaurantName: state.restaurantName,
+          lines: remaining,
+        ),
+      );
     }
     // else: the live cart belongs to another restaurant — keep it intact.
   }
@@ -273,11 +314,17 @@ final cartControllerProvider = NotifierProvider<CartController, CartState>(
 );
 
 extension on CartState {
-  CartState copyWith({String? restaurantId, String? restaurantName, List<CartLine>? lines}) =>
-      CartState(
-        restaurantId: lines == null ? restaurantId : (restaurantId ?? this.restaurantId),
-        restaurantName:
-            lines == null ? restaurantName : (restaurantName ?? this.restaurantName),
-        lines: lines ?? this.lines,
-      );
+  CartState copyWith({
+    String? restaurantId,
+    String? restaurantName,
+    List<CartLine>? lines,
+  }) => CartState(
+    restaurantId: lines == null
+        ? restaurantId
+        : (restaurantId ?? this.restaurantId),
+    restaurantName: lines == null
+        ? restaurantName
+        : (restaurantName ?? this.restaurantName),
+    lines: lines ?? this.lines,
+  );
 }

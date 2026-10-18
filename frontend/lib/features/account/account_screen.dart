@@ -57,9 +57,19 @@ class AccountScreen extends ConsumerWidget {
                   onTap: () => context.go('/orders'),
                 ),
               ),
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: AppSpacing.md),
               Entrance(
                 index: 3,
+                child: _TabLink(
+                  icon: Icons.photo_library_outlined,
+                  title: 'Image credits & licenses',
+                  subtitle: 'Photographers, source pages and reuse terms',
+                  onTap: () => context.push('/image-credits'),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Entrance(
+                index: 4,
                 child: SizedBox(
                   width: double.infinity,
                   height: AppSpacing.controlHeight,
@@ -78,8 +88,9 @@ class AccountScreen extends ConsumerWidget {
               Center(
                 child: Text(
                   'Signed in on this device until you sign out.',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: AppColors.inkFaint),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.inkFaint,
+                  ),
                 ),
               ),
             ],
@@ -146,16 +157,18 @@ class _IdentityCard extends StatelessWidget {
                       : 'QuickBite user',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w800),
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   user?.email ?? '',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: AppColors.inkSoft),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.inkSoft,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Container(
@@ -232,20 +245,24 @@ class _TabLink extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: AppColors.inkSoft),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.inkSoft,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded,
-                  color: AppColors.inkFaint),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.inkFaint,
+              ),
             ],
           ),
         ),

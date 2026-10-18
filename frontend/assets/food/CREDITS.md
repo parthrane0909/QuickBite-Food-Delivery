@@ -6,6 +6,23 @@ served through the API's `image_asset` field.
 
 | Entity | Photo | Author | License | Source |
 |---|---|---|---|---|
+| `family_bakery` | HK food 牛角包 Croissant yellow August 2023 Px3 03.jpg | DNGOWM 655 Rusjamm | CC BY-SA 4.0 | [source](https://commons.wikimedia.org/wiki/File%3AHK_food_%E7%89%9B%E8%A7%92%E5%8C%85_Croissant_yellow_August_2023_Px3_03.jpg) |
+| `family_biryani` | Chicken Biryani by Sukla Dhar.jpg | Sukla Dhar | CC BY-SA 4.0 | [source](https://commons.wikimedia.org/wiki/File%3AChicken_Biryani_by_Sukla_Dhar.jpg) |
+| `family_burgers` | Fuddruckers cheeseburger and steak fries.jpg | EmerandSam from Ballina, Ireland | CC BY-SA 2.0 | [source](https://commons.wikimedia.org/wiki/File%3AFuddruckers_cheeseburger_and_steak_fries.jpg) |
+| `family_chinese` | Kuai-tiao rat na mu.JPG | Takeaway | CC BY-SA 3.0 | [source](https://commons.wikimedia.org/wiki/File%3AKuai-tiao_rat_na_mu.JPG) |
+| `family_desserts` | White chocolate and raspberry cheesecake tart.jpg | Dominique | CC BY 2.0 | [source](https://commons.wikimedia.org/wiki/File%3AWhite_chocolate_and_raspberry_cheesecake_tart.jpg) |
+| `family_healthy_bowls` | Vegan Quinoa Bowl (44040185371).jpg | Ella Olsson from Stockholm, Sweden | CC BY 2.0 | [source](https://commons.wikimedia.org/wiki/File%3AVegan_Quinoa_Bowl_%2844040185371%29.jpg) |
+| `family_indo_chinese` | Gobi manchurian.jpg | scaredy_kat | CC BY 2.5 | [source](https://commons.wikimedia.org/wiki/File%3AGobi_manchurian.jpg) |
+| `family_italian` | Eataly stockholm la pasta et la pizza.jpg | Sinikka Halme | CC BY-SA 4.0 | [source](https://commons.wikimedia.org/wiki/File%3AEataly_stockholm_la_pasta_et_la_pizza.jpg) |
+| `family_japanese_inspired` | Ramen Jump 002.jpg | Ocdp | CC0 | [source](https://commons.wikimedia.org/wiki/File%3ARamen_Jump_002.jpg) |
+| `family_korean_inspired` | Korean cuisine-BBQ Chicken Dolsot Bibimbap.jpg | Alpha | CC BY-SA 2.0 | [source](https://commons.wikimedia.org/wiki/File%3AKorean_cuisine-BBQ_Chicken_Dolsot_Bibimbap.jpg) |
+| `family_mediterranean` | Falafel.JPG | The original uploader was Jerem at French Wikipedia. | CC BY-SA 3.0 | [source](https://commons.wikimedia.org/wiki/File%3AFalafel.JPG) |
+| `family_north_indian` | Biryani Rice with Goat Masala and Lamb Rogan Josh - Zam Zam (415375255).jpg | Alpha from Melbourne, Australia | CC BY-SA 2.0 | [source](https://commons.wikimedia.org/wiki/File%3ABiryani_Rice_with_Goat_Masala_and_Lamb_Rogan_Josh_-_Zam_Zam_%28415375255%29.jpg) |
+| `family_sandwiches` | 5 Brothers - Corner grocery and sandwiches, Key West Florida.jpg | Joe Shlabotnik | CC BY 2.0 | [source](https://commons.wikimedia.org/wiki/File%3A5_Brothers_-_Corner_grocery_and_sandwiches%2C_Key_West_Florida.jpg) |
+| `family_seafood` | Goan Prawns fry.jpg | sanferdrodrigues | CC BY 2.0 | [source](https://commons.wikimedia.org/wiki/File%3AGoan_Prawns_fry.jpg) |
+| `family_south_indian` | Dosa-chutney-sambhar.jpg | Roland | CC BY 2.0 | [source](https://commons.wikimedia.org/wiki/File%3ADosa-chutney-sambhar.jpg) |
+| `family_thai` | Thai green chicken curry and roti.jpg | Takeaway | CC BY-SA 3.0 | [source](https://commons.wikimedia.org/wiki/File%3AThai_green_chicken_curry_and_roti.jpg) |
+| `hero_burger` | Cheeseburger.png | Renee Comet; transparent-background edit by Wikimedia user D | Public domain (US federal work; Public Domain Mark) | [source](https://commons.wikimedia.org/wiki/File:Cheeseburger.png) |
 | `item_baked_cheesecake` | New York Cheesecake - 12387176913.jpg | Thriving Vegetarian | CC BY 2.0 | [source](https://commons.wikimedia.org/wiki/File%3ANew_York_Cheesecake_-_12387176913.jpg) |
 | `item_bbq_chicken_pizza` | B.B.Q. Chicken Pizza (26679384893).jpg | Prayitno / Thank you for (12 millions +) view from Los Angel | CC BY 2.0 | [source](https://commons.wikimedia.org/wiki/File%3AB.B.Q._Chicken_Pizza_%2826679384893%29.jpg) |
 | `item_butter_croissant` | MediasLunasenMardelPlata.jpg | Ezarate | CC BY-SA 4.0 | [source](https://commons.wikimedia.org/wiki/File%3AMediasLunasenMardelPlata.jpg) |
@@ -41,10 +58,7 @@ served through the API's `image_asset` field.
   the table above and `CREDITS.json` record author, license and file
   page per image. ShareAlike applies to the images themselves, not to
   the application code.
-- **CC0 / Public domain**: no conditions; credited above anyway.
-
-All 28 files in this directory are covered by the table above (no other
-sources are bundled).
+- **Unsplash License**: free to use; attribution appreciated.
 
 Replace any photo by editing `scripts/food_photo_overrides.json` and
 re-running `python3 scripts/fetch_food_photos.py --only <entity-id>`.

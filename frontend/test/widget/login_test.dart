@@ -15,7 +15,11 @@ Future<void> _openLogin(WidgetTester tester, TestBackend backend) async {
   // The signed-out landing page is /welcome; login is an explicit step.
   await pumpApp(tester, backend, route: '/login');
   await settleAuth(tester);
-  expect(find.byType(TextFormField), findsNWidgets(2), reason: 'email + password');
+  expect(
+    find.byType(TextFormField),
+    findsNWidgets(2),
+    reason: 'email + password',
+  );
 }
 
 Future<void> _submit(
@@ -36,8 +40,9 @@ void main() {
   setUpAll(initTestLocale);
   setUp(resetPrefs);
 
-  testWidgets('validates email and password before any network call',
-      (tester) async {
+  testWidgets('validates email and password before any network call', (
+    tester,
+  ) async {
     final backend = TestBackend();
     await _openLogin(tester, backend);
 
@@ -47,6 +52,34 @@ void main() {
     expect(find.text('Enter your email address.'), findsOneWidget);
     expect(find.text('Enter your password.'), findsOneWidget);
     expect(backend.auth.loginCalls, 0, reason: 'no call on invalid form');
+  });
+
+  testWidgets('development demo buttons only prefill credentials', (
+    tester,
+  ) async {
+    final backend = TestBackend();
+    await _openLogin(tester, backend);
+
+    final customerDemo = find.text('Customer demo');
+    expect(customerDemo, findsOneWidget);
+    await tester.tap(customerDemo);
+    await tester.pump();
+    expect(
+      tester
+          .widget<TextFormField>(find.byType(TextFormField).first)
+          .controller!
+          .text,
+      'alice@quickbite.dev',
+    );
+    expect(
+      tester
+          .widget<TextFormField>(find.byType(TextFormField).at(1))
+          .controller!
+          .text,
+      'quickbite!alice1',
+    );
+    expect(backend.auth.loginCalls, 0, reason: 'autofill never bypasses auth');
+    await unmountApp(tester);
   });
 
   testWidgets('rejects a malformed email address', (tester) async {
@@ -60,8 +93,9 @@ void main() {
     expect(backend.auth.loginCalls, 0);
   });
 
-  testWidgets('shows the invalid-credentials message for INVALID_CREDENTIALS',
-      (tester) async {
+  testWidgets('shows the invalid-credentials message for INVALID_CREDENTIALS', (
+    tester,
+  ) async {
     final backend = TestBackend()
       ..auth.loginError = const ApiException(
         code: 'INVALID_CREDENTIALS',
@@ -78,7 +112,11 @@ void main() {
 
     expect(find.text('Email or password is incorrect.'), findsOneWidget);
     expect(backend.auth.loginCalls, 1);
-    expect(find.byType(TextFormField), findsNWidgets(2), reason: 'still on login');
+    expect(
+      find.byType(TextFormField),
+      findsNWidgets(2),
+      reason: 'still on login',
+    );
   });
 
   testWidgets('distinguishes a timeout from other failures', (tester) async {
@@ -90,7 +128,11 @@ void main() {
       );
     await _openLogin(tester, backend);
 
-    await _submit(tester, email: 'alice@quickbite.dev', password: 'quickbite!alice1');
+    await _submit(
+      tester,
+      email: 'alice@quickbite.dev',
+      password: 'quickbite!alice1',
+    );
 
     expect(
       find.text('The server took too long to respond. Try again.'),
@@ -98,8 +140,9 @@ void main() {
     );
   });
 
-  testWidgets('distinguishes a network failure from other failures',
-      (tester) async {
+  testWidgets('distinguishes a network failure from other failures', (
+    tester,
+  ) async {
     final backend = TestBackend()
       ..auth.loginError = const ApiException(
         code: 'network_error',
@@ -108,7 +151,11 @@ void main() {
       );
     await _openLogin(tester, backend);
 
-    await _submit(tester, email: 'alice@quickbite.dev', password: 'quickbite!alice1');
+    await _submit(
+      tester,
+      email: 'alice@quickbite.dev',
+      password: 'quickbite!alice1',
+    );
 
     expect(
       find.text('Cannot reach the server. Check your connection.'),
@@ -116,48 +163,72 @@ void main() {
     );
   });
 
-  testWidgets('successful sign-in lands the customer on the restaurant list',
-      (tester) async {
+  testWidgets('successful sign-in lands the customer on discovery', (
+    tester,
+  ) async {
     final backend = TestBackend();
     await _openLogin(tester, backend);
 
-    await _submit(tester, email: 'alice@quickbite.dev', password: 'quickbite!alice1');
+    await _submit(
+      tester,
+      email: 'alice@quickbite.dev',
+      password: 'quickbite!alice1',
+    );
 
     expect(backend.auth.loginCalls, 1);
-    expect(find.text('Bella Napoli'), findsOneWidget, reason: 'catalog home');
+    expect(
+      find.text('Find your next favourite.'),
+      findsOneWidget,
+      reason: 'catalog home',
+    );
   });
 
-  testWidgets('a global 401 returns to login with the expiry notice',
-      (tester) async {
+  testWidgets('a global 401 returns to login with the expiry notice', (
+    tester,
+  ) async {
     final backend = TestBackend();
     await backend.signIn();
     final container = await pumpApp(tester, backend);
-    expect(find.text('Bella Napoli'), findsOneWidget, reason: 'signed in');
+    expect(
+      find.text('Find your next favourite.'),
+      findsOneWidget,
+      reason: 'signed in',
+    );
 
     container.read(authControllerProvider.notifier).handleUnauthorized();
     await tester.pump();
     await settleAuth(tester);
 
-    expect(find.text('Your session expired. Please sign in again.'), findsOneWidget);
+    expect(
+      find.text('Your session expired. Please sign in again.'),
+      findsOneWidget,
+    );
     await unmountApp(tester);
   });
 
-  testWidgets('sign out asks for confirmation and returns to welcome',
-      (tester) async {
+  testWidgets('sign out asks for confirmation and returns to welcome', (
+    tester,
+  ) async {
     final backend = TestBackend();
     await backend.signIn();
     await pumpApp(tester, backend);
-    expect(find.text('Bella Napoli'), findsOneWidget);
+    expect(find.text('Find your next favourite.'), findsOneWidget);
 
     // Sign out lives on the Account tab (new IA: Home / Orders / Account).
     await tester.tap(find.text('Account'));
     await tester.pump();
     await settleAuth(tester);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Sign out'));
+    final signOutButton = find.widgetWithText(FilledButton, 'Sign out');
+    await tester.ensureVisible(signOutButton);
+    await tester.pumpAndSettle();
+    await tester.tap(signOutButton);
     await tester.pump();
     expect(find.text('Sign out?'), findsOneWidget);
-    expect(find.text('You will need to sign in again to browse QuickBite.'), findsOneWidget);
+    expect(
+      find.text('You will need to sign in again to browse QuickBite.'),
+      findsOneWidget,
+    );
 
     await tester.tap(
       find.descendant(
@@ -170,18 +241,22 @@ void main() {
 
     // Signed-out landing page (welcome) — sign-in still one tap away.
     // (The pitch can extend below the fold on short viewports — scroll it up.)
-    expect(
-      find.textContaining('Great food, from kitchens near you.'),
-      findsOneWidget,
+    expect(find.textContaining('Welcome to'), findsOneWidget);
+    final signInButton = find.widgetWithText(
+      FilledButton,
+      'Continue with email',
     );
-    final signInButton = find.widgetWithText(FilledButton, 'Continue with email');
     await tester.ensureVisible(signInButton);
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(signInButton);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 700));
     await settleAuth(tester);
-    expect(find.byType(TextFormField), findsNWidgets(2), reason: 'login from welcome');
+    expect(
+      find.byType(TextFormField),
+      findsNWidgets(2),
+      reason: 'login from welcome',
+    );
     await unmountApp(tester);
   });
 }

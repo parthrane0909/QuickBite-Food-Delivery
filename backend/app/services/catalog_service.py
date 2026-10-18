@@ -8,15 +8,25 @@ from app.repositories import catalog as catalog_repo
 from app.schemas.catalog import MenuItemOut, MenuItemPage, RestaurantOut, RestaurantPage
 
 
-async def list_restaurants(session: AsyncSession, *, page: int, page_size: int) -> RestaurantPage:
-    total = await catalog_repo.count_restaurants(session)
-    rows = await catalog_repo.list_restaurants(session, page=page, page_size=page_size)
+async def list_restaurants(
+    session: AsyncSession,
+    *,
+    page: int,
+    page_size: int,
+    search: str | None = None,
+    cuisine: str | None = None,
+) -> RestaurantPage:
+    total = await catalog_repo.count_restaurants(session, search=search, cuisine=cuisine)
+    rows = await catalog_repo.list_restaurants(
+        session, page=page, page_size=page_size, search=search, cuisine=cuisine
+    )
     return RestaurantPage(
         items=[
             RestaurantOut(
                 id=r.id,
                 name=r.name,
                 description=r.description,
+                cuisine=r.cuisine,
                 currency=r.currency,
                 is_available=r.is_available,
                 image_asset=r.image_asset,
@@ -28,6 +38,10 @@ async def list_restaurants(session: AsyncSession, *, page: int, page_size: int) 
         page_size=page_size,
         total=total,
     )
+
+
+async def list_cuisines(session: AsyncSession) -> list[str]:
+    return await catalog_repo.list_cuisines(session)
 
 
 async def list_menu(

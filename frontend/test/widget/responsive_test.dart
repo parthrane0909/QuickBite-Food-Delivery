@@ -41,7 +41,7 @@ void main() {
     expect(find.text('Home'), findsOneWidget);
   });
 
-  testWidgets('an admin gets a single-destination shell at both widths', (
+  testWidgets('an admin gets the shopping destinations at both widths', (
     tester,
   ) async {
     final backend = TestBackend();
@@ -49,11 +49,11 @@ void main() {
 
     await pumpApp(tester, backend, surfaceSize: _narrow);
     await tester.pump();
-    // One destination: a NavigationBar would assert (min 2 destinations) and
-    // there is nothing to switch, so the shell renders the dashboard alone.
-    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
     expect(find.text('Admin overview'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Orders'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
 
@@ -61,7 +61,8 @@ void main() {
     await pumpApp(tester, backend, surfaceSize: _wide);
     await tester.pump();
     expect(find.byType(NavigationRail), findsOneWidget);
-    expect(find.text('Overview'), findsOneWidget);
+    expect(find.text('Admin'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
     await unmountApp(tester);
   });
 
@@ -111,10 +112,7 @@ void main() {
     // Signed-out landing page at phone width — must not overflow.
     await pumpApp(tester, backend, surfaceSize: _narrow);
     await tester.pump();
-    expect(
-      find.textContaining('Great food, from kitchens near you.'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Welcome to'), findsOneWidget);
     expect(tester.takeException(), isNull, reason: 'overflow on /welcome');
 
     await navTo(tester, '/login');

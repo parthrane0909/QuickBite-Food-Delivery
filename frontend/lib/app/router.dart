@@ -22,7 +22,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/account/account_screen.dart';
+import '../features/account/image_credits_screen.dart';
 import '../features/admin/admin_dashboard_screen.dart';
+import '../features/admin/admin_management_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/cart/cart_screen.dart';
 import '../features/checkout/checkout_screen.dart';
@@ -46,36 +48,52 @@ String? _redirect(Ref ref, GoRouterState state) {
   final auth = ref.read(authControllerProvider);
   final path = state.matchedLocation;
 
-  // Session restore in progress: hold the splash until it resolves.
-  if (auth.phase == AuthPhase.restoring) return null;
+  // Do not mount protected API consumers before session restoration finishes.
+  // A cold browser deep link must retain its destination through sign-in.
+  if (auth.phase == AuthPhase.restoring) {
+    if (path == '/' || path == '/welcome' || path == '/login') return null;
+    return '/?next=${Uri.encodeComponent(state.uri.toString())}';
+  }
 
   if (!auth.isSignedIn) {
     if (path == '/login') return null;
     if (path == '/welcome') return null; // signed-out landing page
-    if (path == '/' || path.isEmpty) return '/welcome';
+    if (path == '/' || path.isEmpty) {
+      final next = state.uri.queryParameters['next'];
+      return next == null
+          ? '/welcome'
+          : '/login?next=${Uri.encodeComponent(next)}';
+    }
     // Deep links skip the landing page and go straight to sign-in with a
     // return target (preserved ?next= behaviour).
     return '/login?next=${Uri.encodeComponent(path)}';
   }
 
   // Signed in.
-  if (path == '/' || path.isEmpty) return auth.isAdmin ? '/admin' : '/restaurants';
+  if (path == '/' || path.isEmpty) {
+    final next = state.uri.queryParameters['next'];
+    if (next != null && next.startsWith('/') && !next.startsWith('//')) {
+      return next;
+    }
+    return auth.isAdmin ? '/admin' : '/restaurants';
+  }
   if (path == '/welcome') return auth.isAdmin ? '/admin' : '/restaurants';
   if (path == '/login') {
     final next = state.uri.queryParameters['next'];
-    if (next != null && next.startsWith('/') && !next.startsWith('//')) return next;
+    if (next != null && next.startsWith('/') && !next.startsWith('//')) {
+      return next;
+    }
     return auth.isAdmin ? '/admin' : '/restaurants';
   }
   if (path.startsWith('/admin') && !auth.isAdmin) return '/restaurants';
-  // Customers cannot use the admin list; admins never use customer list
-  // endpoints (the API would answer 403) or checkout (no payment role).
-  if (auth.isAdmin && path == '/orders') return '/admin';
-  if (auth.isAdmin && (path == '/cart' || path == '/checkout')) return '/admin';
-  if (auth.isAdmin && path == '/account') return '/admin';
+  // Admin tokens may shop as their own identity. The order API scopes every
+  // read and checkout to this token subject; management remains admin-guarded.
   return null;
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  // Menu/item/cart pushes must expose a reloadable browser destination.
+  GoRouter.optionURLReflectsImperativeAPIs = true;
   final refresh = ValueNotifier<int>(0);
   ref.listen(authControllerProvider, (_, _) => refresh.value++);
   ref.onDispose(refresh.dispose);
@@ -85,25 +103,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: '/',
     refreshListenable: refresh,
     redirect: (context, state) => _redirect(ref, state),
-    errorBuilder: (context, state) => NotFoundScreen(location: state.matchedLocation),
+    errorBuilder: (context, state) =>
+        NotFoundScreen(location: state.matchedLocation),
     routes: <RouteBase>[
-      GoRoute(
-        path: '/',
-        builder: (context, state) => const SplashScreen(),
-      ),
+      GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
       GoRoute(
         path: '/welcome',
-        pageBuilder: (context, state) => fadePage<void>(
-          key: state.pageKey,
-          child: const WelcomeScreen(),
-        ),
+        pageBuilder: (context, state) =>
+            fadePage<void>(key: state.pageKey, child: const WelcomeScreen()),
       ),
       GoRoute(
         path: '/login',
-        pageBuilder: (context, state) => fadePage<void>(
-          key: state.pageKey,
-          child: const LoginScreen(),
-        ),
+        pageBuilder: (context, state) =>
+            fadePage<void>(key: state.pageKey, child: const LoginScreen()),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(shell: shell),
@@ -143,14 +155,49 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(
+        path: '/admin/restaurants',
+        builder: (context, state) =>
+            const AdminManagementScreen(section: AdminSection.restaurants),
+      ),
+      GoRoute(
+        path: '/admin/restaurants/:id/menu',
+        builder: (context, state) => AdminManagementScreen(
+          section: AdminSection.menu,
+          restaurantId: state.pathParameters['id']!,
+        ),
+      ),
+      GoRoute(
+        path: '/admin/customers',
+        builder: (context, state) =>
+            const AdminManagementScreen(section: AdminSection.customers),
+      ),
+      GoRoute(
+        path: '/admin/drivers',
+        builder: (context, state) =>
+            const AdminManagementScreen(section: AdminSection.drivers),
+      ),
+      GoRoute(
+        path: '/admin/orders/:id',
+        builder: (context, state) =>
+            AdminOrderDetailScreen(orderId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/image-credits',
+        pageBuilder: (context, state) => fadeSlidePage<void>(
+          key: state.pageKey,
+          child: const ImageCreditsScreen(),
+        ),
+      ),
+      GoRoute(
         path: '/menu/:id/item/:itemId',
         pageBuilder: (context, state) => risePage<void>(
           key: state.pageKey,
           child: ItemDetailScreen(
             restaurantId: state.pathParameters['id']!,
             itemId: state.pathParameters['itemId']!,
-            restaurant:
-                state.extra is Restaurant ? state.extra as Restaurant : null,
+            restaurant: state.extra is Restaurant
+                ? state.extra as Restaurant
+                : null,
           ),
         ),
       ),
@@ -160,16 +207,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           key: state.pageKey,
           child: RestaurantMenuScreen(
             restaurantId: state.pathParameters['id']!,
-            restaurant: state.extra is Restaurant ? state.extra as Restaurant : null,
+            restaurant: state.extra is Restaurant
+                ? state.extra as Restaurant
+                : null,
           ),
         ),
       ),
       GoRoute(
         path: '/cart',
-        pageBuilder: (context, state) => fadeSlidePage<void>(
-          key: state.pageKey,
-          child: const CartScreen(),
-        ),
+        pageBuilder: (context, state) =>
+            fadeSlidePage<void>(key: state.pageKey, child: const CartScreen()),
       ),
       GoRoute(
         path: '/checkout',

@@ -54,21 +54,32 @@ class FoodImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final asset = (assetName != null && assetName!.isNotEmpty && assetName!.startsWith('assets/'))
+    final asset =
+        (assetName != null &&
+            assetName!.isNotEmpty &&
+            assetName!.startsWith('assets/'))
         ? assetName!
         : _dishAssets[stableHash(itemId) % _dishAssets.length];
     final image = Image.asset(
       asset,
+      cacheWidth: expand
+          ? 900
+          : (size * MediaQuery.devicePixelRatioOf(context)).ceil(),
       width: expand ? null : size,
       height: expand ? null : size,
       fit: BoxFit.cover,
       filterQuality: FilterQuality.medium,
+      frameBuilder: (_, child, frame, sync) => sync || frame != null
+          ? child
+          : const ColoredBox(color: AppColors.surfaceWarm),
       errorBuilder: (_, _, _) => expand
           ? _FallbackFill(seed: itemId)
           : _FallbackTile(size: size, seed: itemId),
     );
     return ClipRRect(
-      borderRadius: BorderRadius.circular(rounded ? roundedRadius : AppSpacing.radiusPill),
+      borderRadius: BorderRadius.circular(
+        rounded ? roundedRadius : AppSpacing.radiusPill,
+      ),
       child: expand ? SizedBox.expand(child: image) : image,
     );
   }
@@ -91,7 +102,9 @@ class _FallbackFill extends StatelessWidget {
             AppColors.surfaceWarm,
           ],
           stops: const [0.0, 0.5, 1.0],
-          transform: _GradientRotation((stableHash(seed) % 360) * 3.14159 / 180),
+          transform: _GradientRotation(
+            (stableHash(seed) % 360) * 3.14159 / 180,
+          ),
         ),
       ),
       child: const Center(
@@ -124,7 +137,9 @@ class _FallbackTile extends StatelessWidget {
             AppColors.surfaceWarm,
           ],
           stops: const [0.0, 0.5, 1.0],
-          transform: _GradientRotation((stableHash(seed) % 360) * 3.14159 / 180),
+          transform: _GradientRotation(
+            (stableHash(seed) % 360) * 3.14159 / 180,
+          ),
         ),
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
       ),
@@ -156,7 +171,9 @@ class RestaurantAvatar extends StatelessWidget {
 
   String get _initials {
     final words = name.trim().split(RegExp(r'\s+')).take(2);
-    return words.map((word) => word.isEmpty ? '' : word[0].toUpperCase()).join();
+    return words
+        .map((word) => word.isEmpty ? '' : word[0].toUpperCase())
+        .join();
   }
 
   static const List<Color> _palette = [

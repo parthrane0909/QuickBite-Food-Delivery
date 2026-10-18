@@ -144,7 +144,10 @@ class SkeletonRestaurantCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: const [
-        SkeletonBox(height: 128, radius: AppSpacing.radiusLg),
+        AspectRatio(
+          aspectRatio: 1.65,
+          child: SkeletonBox(radius: AppSpacing.radiusLg),
+        ),
         SizedBox(height: AppSpacing.md),
         SkeletonBox(width: 148, height: 15),
         SizedBox(height: AppSpacing.sm),
@@ -163,11 +166,16 @@ class SkeletonDishTile extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: const [
-        SkeletonBox(height: 118, radius: AppSpacing.radiusLg),
+        AspectRatio(
+          aspectRatio: 1.28,
+          child: SkeletonBox(radius: AppSpacing.radiusLg),
+        ),
         SizedBox(height: AppSpacing.sm + 2),
         SkeletonBox(width: 120, height: 13),
         SizedBox(height: AppSpacing.xs + 2),
         SkeletonBox(width: 72, height: 12),
+        SizedBox(height: AppSpacing.sm),
+        SkeletonBox(height: 48, radius: AppSpacing.radiusPill),
       ],
     );
   }
@@ -184,7 +192,11 @@ class SkeletonListTile extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SkeletonBox(width: leading, height: leading, radius: AppSpacing.radiusMd),
+        SkeletonBox(
+          width: leading,
+          height: leading,
+          radius: AppSpacing.radiusMd,
+        ),
         const SizedBox(width: AppSpacing.lg),
         Expanded(
           child: Column(

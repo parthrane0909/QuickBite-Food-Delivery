@@ -1,6 +1,6 @@
 /// Admin dashboard widget tests (M5 §5): role-aware routing (admins land
-/// on /admin, customers are blocked, admins are kept out of customer
-/// surfaces), read-only summary counts straight from the server, the
+/// on /admin, customers are blocked, admins can shop using their own identity,
+/// read-only summary counts straight from the server, the
 /// cross-customer order list with its status filter, and error states.
 library;
 
@@ -53,7 +53,7 @@ void main() {
       reason: 'status stat card',
     );
     expect(
-      find.textContaining('read-only'),
+      find.textContaining('Read-only'),
       findsOneWidget,
       reason: 'the dashboard states it never mutates state',
     );
@@ -172,19 +172,21 @@ void main() {
     await tester.pump();
 
     expect(find.text('Admin overview'), findsNothing);
-    expect(find.text('Bella Napoli'), findsOneWidget, reason: 'catalog home');
+    expect(
+      find.text('Find your next favourite.'),
+      findsOneWidget,
+      reason: 'catalog home',
+    );
   });
 
-  testWidgets('an admin is redirected away from customer surfaces', (
-    tester,
-  ) async {
+  testWidgets('an admin can shop as their own identity', (tester) async {
     final backend = TestBackend();
     await backend.signIn(role: 'admin');
 
     await pumpApp(tester, backend, route: '/orders');
     await tester.pump();
-    expect(find.text('Order history'), findsNothing);
-    expect(find.text('Admin overview'), findsOneWidget);
+    expect(find.text('Order history'), findsOneWidget);
+    expect(find.text('Admin overview'), findsNothing);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
@@ -192,8 +194,8 @@ void main() {
     resetPrefs();
     await pumpApp(tester, backend, route: '/cart');
     await tester.pump();
-    expect(find.text('My Cart'), findsNothing);
-    expect(find.text('Admin overview'), findsOneWidget);
+    expect(find.text('Admin overview'), findsNothing);
+    expect(find.text('Your cart is empty'), findsOneWidget);
     await unmountApp(tester);
   });
 
@@ -217,7 +219,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('Order details'), findsOneWidget);
+    expect(find.text('Order inspection'), findsOneWidget);
     await unmountApp(tester);
   });
 }

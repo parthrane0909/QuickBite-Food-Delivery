@@ -11,6 +11,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/theme/app_colors.dart';
 
@@ -43,6 +44,7 @@ class Pressable extends StatefulWidget {
 class _PressableState extends State<Pressable> {
   bool _pressed = false;
   bool _hovered = false;
+  bool _focused = false;
 
   bool get _active => widget.enabled && widget.onTap != null;
 
@@ -55,11 +57,20 @@ class _PressableState extends State<Pressable> {
       cursor: _active ? SystemMouseCursors.click : MouseCursor.defer,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: Focus(
-        canRequestFocus: _active,
-        onFocusChange: (focused) {
-          if (focused && !reduce) setState(() => _pressed = true);
-          if (!focused) setState(() => _pressed = false);
+      child: FocusableActionDetector(
+        enabled: _active,
+        onShowFocusHighlight: (value) => setState(() => _focused = value),
+        shortcuts: const <ShortcutActivator, Intent>{
+          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        },
+        actions: <Type, Action<Intent>>{
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              if (_active) widget.onTap!();
+              return null;
+            },
+          ),
         },
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -71,15 +82,21 @@ class _PressableState extends State<Pressable> {
           onTapUp: _active ? (_) => setState(() => _pressed = false) : null,
           onTapCancel: () => setState(() => _pressed = false),
           child: AnimatedContainer(
-            duration: AppMotion.fast,
+            duration: reduce ? Duration.zero : AppMotion.fast,
             curve: AppMotion.easeOut,
+            foregroundDecoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(widget.radius),
+              border: _focused
+                  ? Border.all(color: AppColors.primary, width: 3)
+                  : null,
+            ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(widget.radius),
               boxShadow: lift ? AppShadow.card : const [],
             ),
             child: AnimatedScale(
               scale: _pressed ? widget.scale : 1,
-              duration: AppMotion.instant,
+              duration: reduce ? Duration.zero : AppMotion.instant,
               curve: AppMotion.easeOut,
               child: widget.child,
             ),

@@ -13,6 +13,7 @@ class RestaurantOut(BaseModel):
     id: str
     name: str
     description: str | None = None
+    cuisine: str | None = None
     currency: str
     is_available: bool
     image_asset: str | None = None
@@ -37,3 +38,7 @@ class RestaurantPage(Page[RestaurantOut]):
 
 class MenuItemPage(Page[MenuItemOut]):
     pass
+
+
+class CuisineList(BaseModel):
+    items: list[str]

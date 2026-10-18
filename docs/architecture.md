@@ -7,7 +7,7 @@ Everything below is reproducible from `compose.yaml`.
 
 ```
    ┌─────────────── client boundary (Milestone 5) ────────────────┐
-   │ Flutter app: Android / Web (nginx `web`, :8080) / iOS (pending)│
+   │ Flutter app: Android / Web (nginx `web`, :8080) / iOS (scaffold pending)│
    │   HTTP + bearer token only — no broker/DB knowledge, no secrets │
    └──────────────────────────┬───────────────────────────────────┘
                        127.0.0.1:8000
@@ -59,9 +59,9 @@ Everything below is reproducible from `compose.yaml`.
 | --- | --- |
 | `postgres` | Source of truth (health-gated) |
 | `rabbitmq` | Work distribution only (management UI on `127.0.0.1:15672`) |
-| `migrate` / `seed` | One-shots: schema (0001 + 0002) → idempotent demo data |
+| `migrate` / `seed` | One-shots: schema (0001–0003) → idempotent demo data |
 | `topology-init` | One-shot: declares exchanges/queues/bindings **before** any publisher/consumer starts |
-| `api` | FastAPI: auth, menu, checkout, order reads, notifications endpoint, **admin orders + summary (M5)**, health |
+| `api` | FastAPI: auth, searchable/paginated catalog, checkout and order reads; admin overview, audit-backed restaurant/menu/customer management and driver/order inspection |
 | `outbox-dispatcher` | Separate process loop publishing committed outbox rows (topic events, targeted retries, dead publications) |
 | `retry-scheduler` | Separate DB-only process activating due retries; crash-recovering, `SKIP LOCKED` (multi-instance safe); absence only delays retries |
 | `payment/restaurant/delivery/notification-worker` | Four independent processes, one stage each, freely scalable |
@@ -128,6 +128,13 @@ state and never change order status.
 | `scripts/demo_failures.py` | Interactive protected failure-control demonstrations |
 
 ## Environments and namespaces
+
+Administrative writes use the same PostgreSQL transaction as an append-only
+`admin_audit_logs` row. Restaurant/menu/customer deactivation is soft; order
+records and item-price snapshots remain unchanged. Admin checkout and history
+use only the authenticated admin's own `users.id`, while cross-customer reads
+remain on admin-only routes. The persistent `drivers` roster defines the
+dashboard's total-driver count; assignment names remain snapshots.
 
 - `ENVIRONMENT=test` forces NullPool, zero stage delays, fast outbox polling
   and crash checkpoints that log instead of exiting (see

@@ -182,6 +182,18 @@ async def test_due_retry_survives_dispatcher_downtime_then_processes(
     pipeline.start_dispatcher()
     pipeline.start_scheduler()
     await wait_for_status(order_id, "PAID")
+
+    async def _targeted_publication_confirmed() -> bool:
+        rows = [r for r in await outbox_rows_for_event(event["event_id"]) if r.exchange == ""]
+        return bool(rows and rows[0].state == "SENT")
+
+    # The worker can consume an acknowledged Rabbit message before the
+    # dispatcher finishes committing its SENT bookkeeping transaction.
+    await wait_until(
+        _targeted_publication_confirmed,
+        timeout=5,
+        message="retry publication SENT after broker confirmation",
+    )
     rows = [r for r in await outbox_rows_for_event(event["event_id"]) if r.exchange == ""]
     assert rows[0].state == "SENT"
     jobs = await retry_job_rows("payment", event["event_id"])

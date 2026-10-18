@@ -29,14 +29,15 @@ import 'package:riverpod/misc.dart' show Override;
 Restaurant fixtureRestaurant({
   String id = 'rest_bella_napoli',
   String name = 'Bella Napoli',
-}) =>
-    Restaurant(
-      id: id,
-      name: name,
-      description: 'Wood-fired pizza and handmade pasta',
-      currency: 'INR',
-      isAvailable: true,
-    );
+  String? cuisine,
+}) => Restaurant(
+  id: id,
+  name: name,
+  description: 'Wood-fired pizza and handmade pasta',
+  cuisine: cuisine,
+  currency: 'INR',
+  isAvailable: true,
+);
 
 MenuItem fixtureMenuItem({
   String id = 'item_margherita_pizza',
@@ -44,118 +45,111 @@ MenuItem fixtureMenuItem({
   int priceMinor = 35000,
   bool isAvailable = true,
   String restaurantId = 'rest_bella_napoli',
-}) =>
-    MenuItem(
-      id: id,
-      restaurantId: restaurantId,
-      name: name,
-      description: 'San Marzano tomato, mozzarella, basil',
-      priceMinor: priceMinor,
-      currency: 'INR',
-      isAvailable: isAvailable,
-      sortOrder: 0,
-    );
+}) => MenuItem(
+  id: id,
+  restaurantId: restaurantId,
+  name: name,
+  description: 'San Marzano tomato, mozzarella, basil',
+  priceMinor: priceMinor,
+  currency: 'INR',
+  isAvailable: isAvailable,
+  sortOrder: 0,
+);
 
 Session fixtureSession({
   String role = 'customer',
   String email = 'alice@quickbite.dev',
-}) =>
-    Session(
-      accessToken: 'test-token',
-      tokenType: 'bearer',
-      expiresIn: 900,
-      expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 15)),
-      user: UserSummary(
-        id: 'user-1',
-        email: email,
-        fullName: role == 'admin' ? 'Admin User' : 'Alice Customer',
-        role: role,
-      ),
-    );
+}) => Session(
+  accessToken: 'test-token',
+  tokenType: 'bearer',
+  expiresIn: 900,
+  expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 15)),
+  user: UserSummary(
+    id: 'user-1',
+    email: email,
+    fullName: role == 'admin' ? 'Admin User' : 'Alice Customer',
+    role: role,
+  ),
+);
 
 OrderDetail fixtureOrderDetail({
   String id = 'order-1',
   OrderStatus status = OrderStatus.pending,
   String? failureReason,
   String? failureCode,
-}) =>
-    OrderDetail(
-      id: id,
-      restaurantId: 'rest_bella_napoli',
-      restaurantName: 'Bella Napoli',
-      status: status,
-      currency: 'INR',
-      totalAmountMinor: 35000,
-      version: status == OrderStatus.pending ? 1 : 2,
-      createdAt: DateTime.now().toUtc(),
-      updatedAt: DateTime.now().toUtc(),
-      deliveryAddress: '42 Test Street, Bengaluru',
-      failureReason: failureReason,
-      failureCode: failureCode,
-      items: const [],
-    );
+}) => OrderDetail(
+  id: id,
+  restaurantId: 'rest_bella_napoli',
+  restaurantName: 'Bella Napoli',
+  status: status,
+  currency: 'INR',
+  totalAmountMinor: 35000,
+  version: status == OrderStatus.pending ? 1 : 2,
+  createdAt: DateTime.now().toUtc(),
+  updatedAt: DateTime.now().toUtc(),
+  deliveryAddress: '42 Test Street, Bengaluru',
+  failureReason: failureReason,
+  failureCode: failureCode,
+  items: const [],
+);
 
 OrderHistoryEntry fixtureHistoryEntry({
   int version = 1,
   OrderStatus status = OrderStatus.pending,
   OrderStatus? fromStatus,
-}) =>
-    OrderHistoryEntry(
-      version: version,
-      status: status,
-      fromStatus: fromStatus,
-      source: 'checkout',
-      changedAt: DateTime.now().toUtc(),
-    );
+}) => OrderHistoryEntry(
+  version: version,
+  status: status,
+  fromStatus: fromStatus,
+  source: 'checkout',
+  changedAt: DateTime.now().toUtc(),
+);
 
 NotificationEntry fixtureNotification({
   int seq = 1,
   String type = 'order.created',
-}) =>
-    NotificationEntry(
-      id: 'notif-$seq',
-      seq: seq,
-      orderId: 'order-1',
-      type: type,
-      message: 'Your order was created and is queued for processing.',
-      createdAt: DateTime.now().toUtc(),
-    );
+}) => NotificationEntry(
+  id: 'notif-$seq',
+  seq: seq,
+  orderId: 'order-1',
+  type: type,
+  message: 'Your order was created and is queued for processing.',
+  createdAt: DateTime.now().toUtc(),
+);
 
 OrderSummary fixtureOrderSummary({
   String id = 'order-1',
   OrderStatus status = OrderStatus.pending,
   String restaurantName = 'Bella Napoli',
   int totalAmountMinor = 35000,
-}) =>
-    OrderSummary(
-      id: id,
-      restaurantId: 'rest_bella_napoli',
-      restaurantName: restaurantName,
-      status: status,
-      currency: 'INR',
-      totalAmountMinor: totalAmountMinor,
-      version: 1,
-      createdAt: DateTime.now().toUtc(),
-      updatedAt: DateTime.now().toUtc(),
-    );
+}) => OrderSummary(
+  id: id,
+  restaurantId: 'rest_bella_napoli',
+  restaurantName: restaurantName,
+  status: status,
+  currency: 'INR',
+  totalAmountMinor: totalAmountMinor,
+  version: 1,
+  createdAt: DateTime.now().toUtc(),
+  updatedAt: DateTime.now().toUtc(),
+);
 
 AdminOrderItem fixtureAdminOrderItem({
   String id = 'order-1',
   OrderStatus status = OrderStatus.pending,
   String customerEmail = 'alice@quickbite.dev',
-}) =>
-    AdminOrderItem(
-      id: id,
-      restaurantId: 'rest_bella_napoli',
-      restaurantName: 'Bella Napoli',
-      status: status,
-      currency: 'INR',
-      totalAmountMinor: 35000,
-      version: 1,
-      createdAt: DateTime.now().toUtc(),
-      updatedAt: DateTime.now().toUtc(),
-      customerEmail: customerEmail,
-    );
+}) => AdminOrderItem(
+  id: id,
+  restaurantId: 'rest_bella_napoli',
+  restaurantName: 'Bella Napoli',
+  status: status,
+  currency: 'INR',
+  totalAmountMinor: 35000,
+  version: 1,
+  createdAt: DateTime.now().toUtc(),
+  updatedAt: DateTime.now().toUtc(),
+  customerEmail: customerEmail,
+);
 
 // ------------------------------ auth fake ---------------------------------
 
@@ -180,7 +174,10 @@ class FakeAuthRepository implements AuthRepository {
   int meCalls = 0;
 
   @override
-  Future<Session> login({required String email, required String password}) async {
+  Future<Session> login({
+    required String email,
+    required String password,
+  }) async {
     loginCalls++;
     final error = loginError;
     if (error != null) throw error;
@@ -206,8 +203,8 @@ class FakeCatalogRepository implements CatalogRepository {
     List<MenuItem>? menuItemList,
     this.restaurantsError,
     this.menuError,
-  })  : restaurantList = restaurantList ?? [fixtureRestaurant()],
-        menuItemList = menuItemList ?? [fixtureMenuItem()];
+  }) : restaurantList = restaurantList ?? [fixtureRestaurant()],
+       menuItemList = menuItemList ?? [fixtureMenuItem()];
 
   List<Restaurant> restaurantList;
   List<MenuItem> menuItemList;
@@ -223,22 +220,61 @@ class FakeCatalogRepository implements CatalogRepository {
   int menuCalls = 0;
 
   @override
-  Future<Paged<Restaurant>> restaurants({int page = 1, int pageSize = 20}) async {
+  Future<List<String>> cuisines() async {
+    final values =
+        restaurantList
+            .map((restaurant) => restaurant.cuisine)
+            .whereType<String>()
+            .toSet()
+            .toList()
+          ..sort();
+    return values;
+  }
+
+  @override
+  Future<Paged<Restaurant>> restaurants({
+    int page = 1,
+    int pageSize = 20,
+    String? search,
+    String? cuisine,
+  }) async {
     restaurantCalls++;
     final gate = restaurantsGate;
     if (gate != null) await gate.future;
     final error = restaurantsError;
     if (error != null) throw error;
+    final filtered = restaurantList.where((restaurant) {
+      final matchesSearch =
+          search == null ||
+          restaurant.name.toLowerCase().contains(search.toLowerCase()) ||
+          (restaurant.cuisine?.toLowerCase().contains(search.toLowerCase()) ??
+              false) ||
+          menuItemList.any(
+            (dish) =>
+                dish.restaurantId == restaurant.id &&
+                (dish.name.toLowerCase().contains(search.toLowerCase()) ||
+                    (dish.description?.toLowerCase().contains(
+                          search.toLowerCase(),
+                        ) ??
+                        false)),
+          );
+      return matchesSearch &&
+          (cuisine == null || restaurant.cuisine == cuisine);
+    }).toList();
     return Paged<Restaurant>(
-      items: restaurantList,
+      items: filtered,
       page: page,
       pageSize: pageSize,
-      total: restaurantList.length,
+      total: filtered.length,
     );
   }
 
   @override
-  Future<Paged<MenuItem>> menu(String restaurantId, {int page = 1, int pageSize = 20}) async {
+  Future<Paged<MenuItem>> menu(
+    String restaurantId, {
+    int page = 1,
+    int pageSize = 20,
+  }) async {
     menuCalls++;
     final gate = menuGate;
     if (gate != null) await gate.future;
@@ -249,6 +285,17 @@ class FakeCatalogRepository implements CatalogRepository {
       page: page,
       pageSize: pageSize,
       total: menuItemList.length,
+    );
+  }
+
+  @override
+  Future<MenuItem> menuItem(String restaurantId, String itemId) async {
+    final item = menuItemList.where((candidate) => candidate.id == itemId);
+    if (item.isNotEmpty) return item.first;
+    throw const ApiException(
+      code: 'NOT_FOUND',
+      message: 'Menu item was not found.',
+      statusCode: 404,
     );
   }
 }
@@ -302,19 +349,23 @@ class FakeOrderRepository implements OrderRepository {
     required String deliveryAddress,
     required List<CheckoutItem> items,
   }) async {
-    checkoutCalls.add(CheckoutCall(
-      idempotencyKey: idempotencyKey,
-      restaurantId: restaurantId,
-      deliveryAddress: deliveryAddress,
-      items: items,
-    ));
+    checkoutCalls.add(
+      CheckoutCall(
+        idempotencyKey: idempotencyKey,
+        restaurantId: restaurantId,
+        deliveryAddress: deliveryAddress,
+        items: items,
+      ),
+    );
     final outcome = checkoutScript.isEmpty
         ? CheckoutAccepted(
             orderId: 'order-1',
             status: OrderStatus.pending,
             currency: 'INR',
-            totalAmountMinor:
-                items.fold<int>(0, (sum, item) => sum + 35000 * item.quantity),
+            totalAmountMinor: items.fold<int>(
+              0,
+              (sum, item) => sum + 35000 * item.quantity,
+            ),
             version: 1,
             message: 'Order accepted for asynchronous processing.',
           )
@@ -443,11 +494,11 @@ class TestBackend {
     FakeOrderRepository? orders,
     FakeAdminRepository? admin,
     InMemoryTokenStorage? storage,
-  })  : auth = auth ?? FakeAuthRepository(),
-        catalog = catalog ?? FakeCatalogRepository(),
-        orders = orders ?? FakeOrderRepository(),
-        admin = admin ?? FakeAdminRepository(),
-        storage = storage ?? InMemoryTokenStorage();
+  }) : auth = auth ?? FakeAuthRepository(),
+       catalog = catalog ?? FakeCatalogRepository(),
+       orders = orders ?? FakeOrderRepository(),
+       admin = admin ?? FakeAdminRepository(),
+       storage = storage ?? InMemoryTokenStorage();
 
   final FakeAuthRepository auth;
   final FakeCatalogRepository catalog;
@@ -456,12 +507,12 @@ class TestBackend {
   final InMemoryTokenStorage storage;
 
   List<Override> get overrides => [
-        tokenStorageProvider.overrideWithValue(storage),
-        authRepositoryProvider.overrideWithValue(auth),
-        catalogRepositoryProvider.overrideWithValue(catalog),
-        orderRepositoryProvider.overrideWithValue(orders),
-        adminRepositoryProvider.overrideWithValue(admin),
-      ];
+    tokenStorageProvider.overrideWithValue(storage),
+    authRepositoryProvider.overrideWithValue(auth),
+    catalogRepositoryProvider.overrideWithValue(catalog),
+    orderRepositoryProvider.overrideWithValue(orders),
+    adminRepositoryProvider.overrideWithValue(admin),
+  ];
 
   /// Seed a signed-in customer (or admin) session without hitting login.
   Future<void> signIn({String role = 'customer'}) async {

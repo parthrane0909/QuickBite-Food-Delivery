@@ -26,9 +26,18 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isAdmin = ref.watch(authControllerProvider.select((auth) => auth.isAdmin));
+    final isAdmin = ref.watch(
+      authControllerProvider.select((auth) => auth.isAdmin),
+    );
     final destinations = _destinations(isAdmin: isAdmin);
     final index = _indexForShell(isAdmin: isAdmin);
+    void navigate(int destination) {
+      if (destination == 1) {
+        context.push('/cart');
+        return;
+      }
+      shell.goBranch(_branchFor(destination, isAdmin: isAdmin));
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -38,8 +47,7 @@ class AppShell extends ConsumerWidget {
             children: [
               NavigationRail(
                 selectedIndex: index,
-                onDestinationSelected: (destination) =>
-                    shell.goBranch(_branchFor(destination, isAdmin: isAdmin)),
+                onDestinationSelected: navigate,
                 extended: constraints.maxWidth >= 1280,
                 minExtendedWidth: 200,
                 backgroundColor: AppColors.surface,
@@ -51,8 +59,9 @@ class AppShell extends ConsumerWidget {
                       const CircleAvatar(
                         radius: 20,
                         backgroundColor: AppColors.primaryTint,
-                        backgroundImage:
-                            AssetImage('assets/images/logo_mark.png'),
+                        backgroundImage: AssetImage(
+                          'assets/images/logo_mark.png',
+                        ),
                       ),
                       if (constraints.maxWidth >= 1280) ...[
                         const SizedBox(height: AppSpacing.sm),
@@ -75,48 +84,67 @@ class AppShell extends ConsumerWidget {
             ],
           );
         }
-        // The admin branch has a single destination: a NavigationBar would
-        // assert (it requires >= 2), and there is nothing to switch between.
-        // The dashboard's own app bar carries the logout action when narrow.
-        if (isAdmin) return Scaffold(body: shell);
         return Scaffold(
           body: shell,
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: index,
-            onDestinationSelected: (destination) =>
-                shell.goBranch(_branchFor(destination, isAdmin: isAdmin)),
-            destinations: destinations,
+          bottomNavigationBar: DecoratedBox(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x10000000),
+                  blurRadius: 20,
+                  offset: Offset(0, -4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+              child: NavigationBar(
+                selectedIndex: index,
+                onDestinationSelected: navigate,
+                destinations: destinations,
+              ),
+            ),
           ),
         );
       },
     );
   }
 
-  List<NavigationDestination> _destinations({required bool isAdmin}) => isAdmin
-      ? const [
-          NavigationDestination(
-            selectedIcon: Icon(Icons.insights_rounded),
-            icon: Icon(Icons.insights_outlined),
-            label: 'Overview',
-          ),
-        ]
-      : const [
-          NavigationDestination(
-            selectedIcon: Icon(Icons.home_rounded),
-            icon: Icon(Icons.home_outlined),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            selectedIcon: Icon(Icons.receipt_long_rounded),
-            icon: Icon(Icons.receipt_long_outlined),
-            label: 'Orders',
-          ),
-          NavigationDestination(
-            selectedIcon: Icon(Icons.person_rounded),
-            icon: Icon(Icons.person_outline_rounded),
-            label: 'Account',
-          ),
-        ];
+  List<NavigationDestination> _destinations({required bool isAdmin}) => [
+    if (isAdmin)
+      const NavigationDestination(
+        selectedIcon: Icon(Icons.insights_rounded),
+        icon: Icon(Icons.insights_outlined),
+        label: 'Admin',
+      ),
+    const NavigationDestination(
+      selectedIcon: Icon(Icons.home_rounded),
+      icon: Icon(Icons.home_outlined),
+      label: 'Home',
+    ),
+    const NavigationDestination(
+      icon: CircleAvatar(
+        radius: 23,
+        backgroundColor: AppColors.primary,
+        child: Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 23),
+      ),
+      label: 'Cart',
+    ),
+    const NavigationDestination(
+      selectedIcon: Icon(Icons.receipt_long_rounded),
+      icon: Icon(Icons.receipt_long_outlined),
+      label: 'Orders',
+    ),
+    const NavigationDestination(
+      selectedIcon: Icon(Icons.person_rounded),
+      icon: Icon(Icons.person_outline_rounded),
+      label: 'Account',
+    ),
+  ];
 
   /// Same IA as the bar, in the rail's destination type.
   List<NavigationRailDestination> _railDestinations({required bool isAdmin}) =>
@@ -132,23 +160,37 @@ class AppShell extends ConsumerWidget {
 
   /// Destination index (role-relative) for the current shell branch.
   int _indexForShell({required bool isAdmin}) {
-    if (isAdmin) return 0;
+    if (isAdmin) {
+      return switch (shell.currentIndex) {
+        2 => 0,
+        1 => 3,
+        3 => 4,
+        _ => 1,
+      };
+    }
     return switch (shell.currentIndex) {
-      1 => 1, // Orders
-      3 => 2, // Account
-      _ => 0, // Home
+      1 => 2,
+      3 => 3,
+      _ => 0,
     };
   }
 
   /// Shell branch for a tapped destination.
   ///
-  /// Branch table: 0 = /restaurants (Home), 1 = /orders, 2 = /admin,
-  /// 3 = /account. Admin maps every destination to its single branch.
+  /// Branch table: 0 = /restaurants, 1 = /orders, 2 = /admin, 3 = /account.
   int _branchFor(int destinationIndex, {required bool isAdmin}) {
-    if (isAdmin) return 2;
+    if (isAdmin) {
+      return switch (destinationIndex) {
+        0 => 2,
+        1 => 0,
+        3 => 1,
+        _ => 3,
+      };
+    }
     return switch (destinationIndex) {
       0 => 0,
-      1 => 1,
+      1 => 0,
+      2 => 1,
       _ => 3,
     };
   }
@@ -161,7 +203,9 @@ Future<void> confirmSignOut(BuildContext context, WidgetRef ref) async {
     context: context,
     builder: (dialogContext) => AlertDialog(
       title: const Text('Sign out?'),
-      content: const Text('You will need to sign in again to browse QuickBite.'),
+      content: const Text(
+        'You will need to sign in again to browse QuickBite.',
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),

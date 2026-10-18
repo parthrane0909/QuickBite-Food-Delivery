@@ -1,0 +1,2 @@
+{"ts": "2026-10-18T16:41:12.531+00:00", "level": "INFO", "logger": "quickbite.catalogue", "service": "catalogue-seed", "message": "large catalogue seed complete", "result": "{'restaurants_before': 2000, 'restaurants_added': 0, 'menu_items_added': 3984}"}
+{'restaurants_before': 2000, 'restaurants_added': 0, 'menu_items_added': 3984}

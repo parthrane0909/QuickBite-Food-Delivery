@@ -13,6 +13,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.models.driver import Driver
 from app.db.models.order import Order
 from app.db.models.outbox_event import OutboxEvent
 from app.db.models.quarantine_record import QuarantineRecord
@@ -77,4 +78,9 @@ async def count_retry_backlog(session: AsyncSession) -> int:
 
 async def count_quarantine(session: AsyncSession) -> int:
     result = await session.execute(select(func.count()).select_from(QuarantineRecord))
+    return int(result.scalar_one())
+
+
+async def count_distinct_drivers(session: AsyncSession) -> int:
+    result = await session.execute(select(func.count()).select_from(Driver))
     return int(result.scalar_one())

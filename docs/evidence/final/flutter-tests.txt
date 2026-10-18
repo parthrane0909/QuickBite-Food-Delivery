@@ -1,0 +1,130 @@
+
+Building Linux applications requires some tools that are not included
+in the Flutter snap and need to be installed on your system:
+
+  - clang
+  - cmake
+  - ninja
+  - GTK 3 development files
+
+To install them, run:
+
+  sudo apt install clang cmake ninja-build g++ pkg-config libgtk-3-dev
+
+00:00 +0: loading /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/stage1_design_test.dart
+00:00 +0: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/stage1_design_test.dart: (setUpAll)
+00:00 +0: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/stage1_design_test.dart: cards activate once with Enter and Space
+00:00 +1: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/stage1_design_test.dart: four stage-one screens fit 360.0×640.0
+00:01 +2: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/stage1_design_test.dart: four stage-one screens fit 393.0×852.0
+00:01 +3: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/stage1_design_test.dart: four stage-one screens fit 768.0×1024.0
+00:01 +4: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/stage1_design_test.dart: four stage-one screens fit 1280.0×900.0
+00:01 +5: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/stage1_design_test.dart: four stage-one screens fit 1440.0×900.0
+00:02 +6: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/stage1_design_test.dart: four stage-one screens fit 852.0×393.0
+00:02 +7: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/stage1_design_test.dart: large text and keyboard inset keep login usable
+00:02 +8: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/stage1_design_test.dart: large text selects readable full-width menu cards
+00:02 +9: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/stage1_design_test.dart: reduced motion shows settled welcome and route content
+00:02 +10: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/stage1_design_test.dart: (tearDownAll)
+00:02 +10: loading /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/admin_test.dart
+00:03 +10: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/admin_test.dart: (setUpAll)
+00:03 +10: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/admin_test.dart: an admin lands on the overview with server summary counts
+00:04 +11: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/admin_test.dart: the admin status filter queries the server with apiValue
+00:04 +12: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/admin_test.dart: selected admin filter chip label contrasts with its pill
+00:04 +13: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/admin_test.dart: admin orders show a filter-specific empty state
+00:05 +14: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/admin_test.dart: a 403 on admin data surfaces an error state with retry
+00:05 +15: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/admin_test.dart: a customer is redirected away from /admin
+00:05 +16: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/admin_test.dart: an admin can shop as their own identity
+00:06 +17: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/admin_test.dart: tapping an admin order card opens the shared tracking view
+00:06 +18: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/admin_test.dart: (tearDownAll)
+00:06 +18: loading /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/responsive_test.dart
+00:07 +18: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/responsive_test.dart: (setUpAll)
+00:07 +18: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/responsive_test.dart: narrow width uses the bottom NavigationBar
+00:07 +19: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/responsive_test.dart: wide width uses the NavigationRail
+00:08 +20: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/responsive_test.dart: an admin gets the shopping destinations at both widths
+00:08 +21: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/responsive_test.dart: key screens fit the narrowest supported width (no overflow)
+00:09 +22: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/responsive_test.dart: the welcome page and login form fit the narrowest width
+00:09 +23: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/responsive_test.dart: every screen fits a 768px tablet without overflow
+00:09 +24: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/responsive_test.dart: (tearDownAll)
+00:09 +24: loading /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart
+00:10 +24: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: (setUpAll)
+00:10 +24: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: Restaurant list shows the loading state until the page arrives
+00:11 +25: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: Restaurant list renders the seeded restaurants
+00:11 +26: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: Restaurant list cuisine chips use the server-backed catalog filter
+00:11 +27: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: Restaurant list shows the empty state when no restaurants are seeded
+00:11 +28: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: Restaurant list shows an error state whose retry recovers
+00:11 +29: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: Restaurant list tapping a restaurant opens its menu
+00:11 +30: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: Restaurant menu shows the menu loading state
+00:12 +31: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: Restaurant menu unavailable items are visible but not purchasable
+00:12 +32: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: Restaurant menu shows the empty state when the menu has no items
+00:12 +33: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: Restaurant menu menu error state retries successfully
+00:12 +34: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: Restaurant menu adding shows the cart bar and updating quantity updates it
+00:12 +35: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: Restaurant menu a cart from another restaurant prompts before replacing
+00:13 +36: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: Item detail shows the item and adds the selected quantity to the cart
+00:13 +37: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: Item detail an unknown item shows the not-found state
+00:13 +38: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/catalog_test.dart: (tearDownAll)
+00:13 +38: loading /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/login_test.dart
+00:13 +38: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/login_test.dart: (setUpAll)
+00:14 +38: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/login_test.dart: validates email and password before any network call
+00:15 +39: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/login_test.dart: rejects a malformed email address
+00:15 +40: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/login_test.dart: shows the invalid-credentials message for INVALID_CREDENTIALS
+00:15 +41: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/login_test.dart: distinguishes a timeout from other failures
+00:15 +42: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/login_test.dart: distinguishes a network failure from other failures
+00:15 +43: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/login_test.dart: successful sign-in lands the customer on discovery
+00:16 +44: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/login_test.dart: a global 401 returns to login with the expiry notice
+00:16 +45: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/login_test.dart: sign out asks for confirmation and returns to welcome
+00:16 +46: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/login_test.dart: (tearDownAll)
+00:16 +46: loading /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/orders_test.dart
+00:17 +46: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/orders_test.dart: (setUpAll)
+00:17 +46: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/orders_test.dart: Acknowledgement deep-linked ack without acceptance state forwards to tracking
+00:18 +47: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/orders_test.dart: Live tracking polls every 2 seconds and stops at the terminal state
+00:18 +48: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/orders_test.dart: Live tracking polling backs off exponentially while errors persist
+00:18 +49: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/orders_test.dart: Live tracking a failed order surfaces the server failure reason
+00:18 +50: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/orders_test.dart: Live tracking manual refresh re-fetches immediately
+00:19 +51: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/orders_test.dart: Live tracking per-order notifications are shown
+00:19 +52: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/orders_test.dart: Order history lists the customer orders and applies the status filter
+00:19 +53: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/orders_test.dart: Order history selected filter chip label contrasts with its pill
+00:19 +54: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/orders_test.dart: Order history shows the empty state when no orders were placed
+00:19 +55: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/orders_test.dart: Order history shows a filter-specific empty state
+00:19 +56: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/orders_test.dart: (tearDownAll)
+00:19 +56: loading /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/checkout_test.dart
+00:20 +56: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/checkout_test.dart: (setUpAll)
+00:20 +56: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/checkout_test.dart: empty cart shows the nothing-to-check-out state
+00:21 +57: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/checkout_test.dart: address is required before any request is sent
+00:21 +58: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/checkout_test.dart: timeout keeps the key: retry re-sends the IDENTICAL request, then succeeds
+00:22 +59: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/checkout_test.dart: discarding an uncertain attempt asks for confirmation
+00:22 +60: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/checkout_test.dart: a 409 idempotency conflict surfaces and can be discarded
+00:22 +61: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/checkout_test.dart: a definite 4xx rejection auto-discards the attempt
+00:23 +62: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/checkout_test.dart: a 401 keeps the attempt so it can resume after re-login
+00:23 +63: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/checkout_test.dart: a successful checkout clears the ordered lines
+00:23 +64: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/checkout_test.dart: the server-issued total is shown on the acknowledgement
+00:23 +65: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/checkout_test.dart: (tearDownAll)
+00:23 +65: loading /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/cart_test.dart
+00:24 +65: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/cart_test.dart: (setUpAll)
+00:24 +65: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/cart_test.dart: empty cart shows the empty state, not a checkout button
+00:25 +66: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/cart_test.dart: renders the line, restaurant lock notice and subtotal preview
+00:25 +67: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/cart_test.dart: quantity stepper updates line and subtotal within 1..20
+00:25 +68: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/cart_test.dart: decrementing below the minimum removes the line
+00:25 +69: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/cart_test.dart: the remove action deletes exactly that line
+00:25 +70: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/cart_test.dart: clearing the cart requires confirmation
+00:26 +71: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/cart_test.dart: proceeding to checkout carries the cart
+00:26 +72: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/widget/cart_test.dart: (tearDownAll)
+00:26 +72: loading /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart
+00:26 +72: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Session (POST /auth/login response) parses token, expiry metadata and the nested user
+00:26 +73: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Session (POST /auth/login response) parses an admin session
+00:26 +74: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Restaurant / MenuItem (GET /restaurants, GET /restaurants/{id}/menu) restaurant keeps minor-unit-free catalog fields
+00:26 +75: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Restaurant / MenuItem (GET /restaurants, GET /restaurants/{id}/menu) menu item maps price_amount_minor to priceMinor
+00:26 +76: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Orders accepted (202) body parses; it is acceptance, not completion
+00:26 +77: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Orders order summary parses every status the server can send
+00:26 +78: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Orders order detail parses lines, address and failure fields
+00:26 +79: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Orders history entry parses from_status and source
+00:26 +80: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Orders history entry without from_status (v1) parses as null
+00:26 +81: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Notifications (GET /orders/{id}/notifications) parses seq, type, message and version
+00:26 +82: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Admin (GET /admin/orders, GET /admin/summary) admin order item keeps every summary field plus customer_email
+00:26 +83: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Admin (GET /admin/orders, GET /admin/summary) summary parses all six status counts incl. zeros
+00:26 +84: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Pagination envelope parses items/page/page_size/total and computes hasMore
+00:26 +85: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: OrderStatus strict parsing (contract violations fail loudly) parses all six contract values
+00:26 +86: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: OrderStatus strict parsing (contract violations fail loudly) throws FormatException on an unknown status
+00:26 +87: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: OrderStatus strict parsing (contract violations fail loudly) terminal/success/failure classification matches the assignment
+00:26 +88: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Money formatting (minor units only, server-authoritative) formats INR with the ₹ symbol and two decimals
+00:26 +89: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Money formatting (minor units only, server-authoritative) groups thousands
+00:26 +90: /home/parthrane/Parth/Internship/Food Delivery App/frontend/test/data/dto_contract_test.dart: Money formatting (minor units only, server-authoritative) formats USD with the $ symbol
+00:26 +91: All tests passed!

@@ -8,9 +8,12 @@ the counts it accompanies.
 
 from __future__ import annotations
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.models.order import Order
+from app.db.models.restaurant import Restaurant
+from app.db.models.user import User
 from app.repositories import admin as admin_repo
 from app.schemas.admin import (
     ALL_ORDER_STATUSES,
@@ -61,6 +64,20 @@ async def get_summary(session: AsyncSession) -> AdminSummary:
         pending_outbox_events=await admin_repo.count_unpublished_outbox(session),
         retry_backlog=await admin_repo.count_retry_backlog(session),
         quarantine_records=await admin_repo.count_quarantine(session),
+        total_restaurants=int(
+            (await session.execute(select(func.count()).select_from(Restaurant))).scalar_one()
+        ),
+        total_customers=int(
+            (
+                await session.execute(
+                    select(func.count()).select_from(User).where(User.role == "customer")
+                )
+            ).scalar_one()
+        ),
+        total_drivers=await admin_repo.count_distinct_drivers(session),
+        total_orders=int(
+            (await session.execute(select(func.count()).select_from(Order))).scalar_one()
+        ),
         generated_at=generated_at,
     )
 
